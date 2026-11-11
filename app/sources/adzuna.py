@@ -35,7 +35,10 @@ def _salary(r: dict) -> str | None:
     if not lo and not hi:
         return None
     lo, hi = int(lo or hi), int(hi or lo)
-    txt = f"{lo:,} €/an" if lo == hi else f"{lo:,} – {hi:,} €/an"
+    # Adzuna dit « annuel », mais certaines offres donnent un salaire mensuel
+    # (ex. 1 570 – 2 230) : sous 5 000, on considère que c'est par mois.
+    unite = "€/mois" if hi < 5000 else "€/an"
+    txt = f"{lo:,} {unite}" if lo == hi else f"{lo:,} – {hi:,} {unite}"
     txt = txt.replace(",", " ")
     if str(r.get("salary_is_predicted")) == "1":
         txt += " (estimation Adzuna)"
