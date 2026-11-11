@@ -31,6 +31,45 @@ MIGRATIONS = [
     CREATE INDEX idx_offers_fingerprint ON offers (fingerprint);
     CREATE INDEX idx_offers_published   ON offers (published_at);
     """,
+    # v2 : profils de recherche + file d'attente de l'IA
+    """
+    CREATE TABLE profiles (
+        id          INTEGER PRIMARY KEY,
+        name        TEXT NOT NULL UNIQUE,          -- « Réseau / Cloud », « Job alimentaire »
+        first_name  TEXT NOT NULL,
+        cv_path     TEXT NOT NULL,                 -- /var/lib/kazuo/cv/<identifiant>.pdf
+        cv_text     TEXT NOT NULL,                 -- texte extrait du PDF
+        cv_summary  TEXT,                          -- CV condensé, pour des prompts courts
+        jobs        TEXT NOT NULL DEFAULT '[]',    -- JSON : métiers visés
+        keywords    TEXT NOT NULL DEFAULT '[]',    -- JSON : mots-clés de recherche
+        excluded    TEXT NOT NULL DEFAULT '[]',    -- JSON : mots à exclure
+        rome_codes  TEXT NOT NULL DEFAULT '[]',    -- JSON : codes ROME (à vérifier)
+        contracts   TEXT NOT NULL DEFAULT '[]',    -- JSON : CDI, CDD, intérim, alternance...
+        city        TEXT NOT NULL DEFAULT 'Bordeaux',
+        radius_km   INTEGER NOT NULL DEFAULT 30,
+        status      TEXT NOT NULL DEFAULT 'draft'
+                    CHECK (status IN ('draft', 'active', 'paused')),
+        created_at  TEXT NOT NULL,
+        updated_at  TEXT NOT NULL
+    );
+
+    CREATE TABLE llm_jobs (
+        id          INTEGER PRIMARY KEY,
+        kind        TEXT NOT NULL,                 -- 'profile_from_cv', 'score_offer'...
+        payload     TEXT NOT NULL,                 -- JSON : paramètres de la tâche
+        priority    INTEGER NOT NULL DEFAULT 10,   -- plus grand = plus urgent
+        status      TEXT NOT NULL DEFAULT 'pending'
+                    CHECK (status IN ('pending', 'running', 'done', 'error')),
+        attempts    INTEGER NOT NULL DEFAULT 0,
+        result      TEXT,                          -- JSON : réponse validée de l'IA
+        error       TEXT,
+        created_at  TEXT NOT NULL,
+        started_at  TEXT,
+        finished_at TEXT,
+        duration_s  REAL                           -- mesure réelle du temps de calcul
+    );
+    CREATE INDEX idx_llm_jobs_queue ON llm_jobs (status, priority DESC, id);
+    """,
 ]
 
 
