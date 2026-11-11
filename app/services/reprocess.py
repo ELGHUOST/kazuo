@@ -21,7 +21,7 @@ def main() -> None:
                 continue
             o = to_offer(json.loads(r["raw_json"]))
             nouveau = {c: getattr(o, c) for c in CHAMPS}
-            nouveau["fingerprint"] = fingerprint(o.title, o.company)
+            nouveau["fingerprint"] = fingerprint(o.title, o.company, o.location)
             vus += 1
             if any(r[c] != v for c, v in nouveau.items()):
                 modifies += 1

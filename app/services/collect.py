@@ -26,7 +26,7 @@ def save(offers: list[Offer]) -> int:
                    (source, source_id, fingerprint, title, company, location, contract,
                     salary, description, url, published_at, fetched_at, raw_json)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (o.source, o.source_id, fingerprint(o.title, o.company), o.title,
+                (o.source, o.source_id, fingerprint(o.title, o.company, o.location), o.title,
                  o.company, o.location, o.contract, o.salary, o.description, o.url,
                  o.published_at, now, json.dumps(o.raw, ensure_ascii=False)),
             )
