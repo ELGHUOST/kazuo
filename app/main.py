@@ -1,11 +1,47 @@
 """Kazuo — point d'entrée de l'application web (FastAPI)."""
+from contextlib import asynccontextmanager
+from datetime import datetime
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 
 from app.config import settings
+from app.db import migrate, session
 
-app = FastAPI(title="Kazuo", version="0.1.0")
+TZ = ZoneInfo(settings.tz)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    migrate()  # crée la base ou applique les migrations manquantes au démarrage
+    yield
+
+
+app = FastAPI(title="Kazuo", version="0.1.0", lifespan=lifespan)
+templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
+
+
+def paris(iso: str | None) -> str:
+    """'2026-11-11T04:12:42Z' (UTC) → '11/11/2026 05:12' (heure de Paris)."""
+    if not iso:
+        return "date inconnue"
+    try:
+        return datetime.fromisoformat(iso).astimezone(TZ).strftime("%d/%m/%Y %H:%M")
+    except ValueError:
+        return iso
+
+
+def safe_url(url: str | None) -> str:
+    """N'autorise que les liens http(s) : une source ne doit pas pouvoir injecter un lien javascript:."""
+    return url if url and url.startswith(("https://", "http://")) else "#"
+
+
+templates.env.filters["paris"] = paris
+templates.env.filters["safe_url"] = safe_url
 
 
 def _check_ollama() -> dict:
@@ -21,9 +57,12 @@ def _check_ollama() -> dict:
 @app.get("/health")
 def health() -> dict:
     """État de l'appli et de ses dépendances."""
+    with session() as conn:
+        nb_offres = conn.execute("SELECT COUNT(*) FROM offers").fetchone()[0]
     return {
         "app": "ok",
         "ollama": _check_ollama(),
+        "base": {"offres": nb_offres},
         # « configurée » = valeur présente dans kazuo.env, PAS « identifiants valides »
         "sources_configurees": {
             "france_travail": bool(settings.ft_client_id and settings.ft_client_secret),
@@ -34,10 +73,24 @@ def health() -> dict:
 
 
 @app.get("/", response_class=HTMLResponse)
-def index() -> str:
-    return (
-        "<h1>Kazuo</h1>"
-        "<p>Le squelette fonctionne.</p>"
-        "<ul><li><a href='/health'>/health</a> — état de l'appli</li>"
-        "<li><a href='/docs'>/docs</a> — documentation interactive de l'API</li></ul>"
+def index(request: Request):
+    """Liste des offres : une carte par empreinte, les doublons sont regroupés dessous."""
+    with session() as conn:
+        total = conn.execute("SELECT COUNT(*) FROM offers").fetchone()[0]
+        offres = conn.execute(
+            """SELECT o.*, g.nb
+               FROM (SELECT fingerprint, MAX(id) AS id_ref, COUNT(*) AS nb,
+                            MAX(published_at) AS derniere
+                     FROM offers GROUP BY fingerprint) AS g
+               JOIN offers AS o ON o.id = g.id_ref
+               ORDER BY g.derniere DESC
+               LIMIT 300"""
+        ).fetchall()
+        groupes: dict[str, list] = {}
+        for r in conn.execute(
+            "SELECT fingerprint, location, url, published_at FROM offers ORDER BY published_at DESC"
+        ):
+            groupes.setdefault(r["fingerprint"], []).append(r)
+    return templates.TemplateResponse(
+        request, "offers.html", {"offres": offres, "groupes": groupes, "total": total}
     )
