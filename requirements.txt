@@ -1,0 +1,6 @@
+# Dépendances directes de Kazuo (versions exactes figées dans requirements.lock)
+fastapi
+uvicorn[standard]
+httpx
+jinja2
+python-dotenv
