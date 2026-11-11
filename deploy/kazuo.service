@@ -12,15 +12,38 @@ Environment=PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 ExecStart=/opt/kazuo/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --no-server-header
 Restart=on-failure
 RestartSec=5
-
-# Durcissement : l'appli ne voit et ne modifie que ce dont elle a besoin
-NoNewPrivileges=yes
-PrivateTmp=yes
-ProtectSystem=strict
-ProtectHome=yes
-ReadWritePaths=/var/lib/kazuo
-RestrictSUIDSGID=yes
 UMask=0027
+
+# --- Fichiers : tout en lecture seule, sauf les données ---
+ProtectSystem=strict
+ReadWritePaths=/var/lib/kazuo
+ProtectHome=yes
+PrivateTmp=yes
+
+# --- Privilèges : aucun, et impossible d'en obtenir ---
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=yes
+RemoveIPC=yes
+
+# --- Noyau : ni réglages, ni modules, ni journaux, ni cgroups, ni nom d'hôte ---
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectHostname=yes
+
+# --- Appels système et réseau : uniquement ce dont un service web a besoin ---
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallErrorNumber=EPERM
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
 
 [Install]
 WantedBy=multi-user.target
