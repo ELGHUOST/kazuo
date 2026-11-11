@@ -1,4 +1,5 @@
 """Kazuo — point d'entrée de l'application web (FastAPI)."""
+import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -11,17 +12,26 @@ from fastapi.templating import Jinja2Templates
 
 from app.config import settings
 from app.db import migrate, session
+from app.llm import queue, tasks  # noqa: F401  (tasks enregistre les types de tâches)
+from app.routers import llm as llm_router
 
 TZ = ZoneInfo(settings.tz)
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)-9s %(name)s - %(message)s")
+# Sans cette ligne, httpx journaliserait chaque URL appelée, clé Adzuna comprise.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    migrate()  # crée la base ou applique les migrations manquantes au démarrage
+    migrate()      # crée la base ou applique les migrations manquantes
+    queue.start()  # démarre le worker IA (un seul thread)
     yield
+    queue.stop()   # arrêt propre du worker
 
 
 app = FastAPI(title="Kazuo", version="0.1.0", lifespan=lifespan)
+app.include_router(llm_router.router)
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
 
