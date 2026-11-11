@@ -78,12 +78,14 @@ def index(request: Request):
     with session() as conn:
         total = conn.execute("SELECT COUNT(*) FROM offers").fetchone()[0]
         offres = conn.execute(
-            """SELECT o.*, g.nb
-               FROM (SELECT fingerprint, MAX(id) AS id_ref, COUNT(*) AS nb,
-                            MAX(published_at) AS derniere
-                     FROM offers GROUP BY fingerprint) AS g
-               JOIN offers AS o ON o.id = g.id_ref
-               ORDER BY g.derniere DESC
+            """SELECT * FROM (
+                   SELECT o.*,
+                          COUNT(*) OVER (PARTITION BY fingerprint) AS nb,
+                          ROW_NUMBER() OVER (PARTITION BY fingerprint
+                                             ORDER BY published_at DESC, id DESC) AS rang
+                   FROM offers AS o)
+               WHERE rang = 1
+               ORDER BY published_at DESC
                LIMIT 300"""
         ).fetchall()
         groupes: dict[str, list] = {}
