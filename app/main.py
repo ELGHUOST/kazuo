@@ -14,6 +14,7 @@ from app.config import settings
 from app.db import migrate, session
 from app.llm import queue, tasks  # noqa: F401  (tasks enregistre les types de tâches)
 from app.routers import llm as llm_router
+from app.routers import profiles as profiles_router
 
 TZ = ZoneInfo(settings.tz)
 
@@ -32,6 +33,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Kazuo", version="0.1.0", lifespan=lifespan)
 app.include_router(llm_router.router)
+app.include_router(profiles_router.router)
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
 
