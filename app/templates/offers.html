@@ -1,51 +1,28 @@
-<!doctype html>
-<html lang="fr">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Kazuo — offres</title>
-  <style>
-    body { font-family: system-ui, sans-serif; max-width: 860px; margin: 0 auto; padding: 1rem; background: #f5f6f8; color: #1d2330; }
-    header p { color: #5b6475; margin-top: .2rem; }
-    .offre { background: #fff; border-radius: 10px; padding: .9rem 1rem; margin: .8rem 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-    .titre { color: #1a4fd6; font-weight: 600; text-decoration: none; }
-    .ligne { color: #5b6475; font-size: .92rem; margin-top: .3rem; }
-    .badge { display: inline-block; font-size: .72rem; padding: .1rem .45rem; border-radius: 6px; background: #e8edf8; color: #1a4fd6; margin-right: .4rem; vertical-align: middle; }
-    .desc { font-size: .9rem; color: #333a47; margin-top: .5rem; }
-    details { margin-top: .4rem; font-size: .9rem; }
-    footer { color: #8a92a3; font-size: .85rem; margin: 2rem 0 1rem; }
-  </style>
-</head>
-<body>
-  <header>
-    <h1>Kazuo</h1>
-    <p>{{ offres|length }} offres uniques · {{ total }} annonces en base</p>
-  </header>
-
-  {% for o in offres %}
-  <article class="offre">
-    <span class="badge">{{ o.source }}</span>
-    <a class="titre" href="{{ o.url|safe_url }}" target="_blank" rel="noopener noreferrer">{{ o.title }}</a>
-    <div class="ligne">{{ o.company or "Entreprise non précisée" }} · {{ o.location or "Lieu non précisé" }}</div>
-    <div class="ligne">{{ o.contract or "Contrat non précisé" }} · {{ o.salary or "Salaire non précisé" }} · publiée le {{ o.published_at|paris }}</div>
-    {% if o.description %}
-    <div class="desc">{{ o.description[:300] }}{% if o.description|length > 300 %}…{% endif %}</div>
-    {% endif %}
-    {% if o.nb > 1 %}
-    <details>
-      <summary>{{ o.nb }} annonces similaires</summary>
-      <ul>
-        {% for a in groupes[o.fingerprint] %}
-        <li><a href="{{ a.url|safe_url }}" target="_blank" rel="noopener noreferrer">{{ a.location or "Lieu non précisé" }}</a> — {{ a.published_at|paris }}</li>
-        {% endfor %}
-      </ul>
-    </details>
-    {% endif %}
-  </article>
-  {% else %}
-  <p>Aucune offre en base. Lance une collecte : <code>python -m app.services.collect</code></p>
-  {% endfor %}
-
-  <footer><a href="/health">/health</a> · <a href="/docs">/docs</a></footer>
-</body>
-</html>
+{% extends "base.html" %}
+{% block title %}Kazuo — offres{% endblock %}
+{% block content %}
+<p class="ligne">{{ offres|length }} offres uniques · {{ total }} annonces en base</p>
+{% for o in offres %}
+<article class="carte">
+  <span class="badge">{{ o.source }}</span>
+  <a class="titre" href="{{ o.url|safe_url }}" target="_blank" rel="noopener noreferrer">{{ o.title }}</a>
+  <div class="ligne">{{ o.company or "Entreprise non précisée" }} · {{ o.location or "Lieu non précisé" }}</div>
+  <div class="ligne">{{ o.contract or "Contrat non précisé" }} · {{ o.salary or "Salaire non précisé" }} · publiée le {{ o.published_at|paris }}</div>
+  {% if o.description %}
+  <div class="desc">{{ o.description[:300] }}{% if o.description|length > 300 %}…{% endif %}</div>
+  {% endif %}
+  {% if o.nb > 1 %}
+  <details>
+    <summary>{{ o.nb }} annonces similaires</summary>
+    <ul>
+      {% for a in groupes[o.fingerprint] %}
+      <li><a href="{{ a.url|safe_url }}" target="_blank" rel="noopener noreferrer">{{ a.location or "Lieu non précisé" }}</a> — {{ a.published_at|paris }}</li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+</article>
+{% else %}
+<p>Aucune offre en base. Lance une collecte : <code>python -m app.services.collect</code></p>
+{% endfor %}
+{% endblock %}

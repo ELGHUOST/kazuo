@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Kazuo — profils{% endblock %}
+{% block content %}
+<h2>Profils de recherche</h2>
+<p class="ligne">Un profil n'est utilisé par la collecte qu'une fois <b>actif</b>.
+  Pour en créer un : <a href="/docs#/Profils/creer_profil_api_profiles_post">/docs → POST /api/profiles</a>.</p>
+{% for p in profils %}
+<article class="carte">
+  <span class="badge {{ p.status }}">{{ libelles[p.status] }}</span>
+  <a class="titre" href="/profils/{{ p.id }}">{{ p.name }}</a>
+  <div class="ligne">{{ p.first_name }} · {{ p.city }} ({{ p.radius_km }} km) · {{ p.contracts|join(", ") or "aucun contrat" }}</div>
+  <div class="ligne">Recherches : {{ p.keywords|join(" · ") or "aucune" }}</div>
+</article>
+{% else %}
+<p>Aucun profil.</p>
+{% endfor %}
+{% endblock %}

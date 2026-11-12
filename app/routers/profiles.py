@@ -60,5 +60,7 @@ def relancer_analyse(profile_id: int, objectif: Annotated[str, Form()] = "") -> 
     with session() as conn:
         if conn.execute("SELECT 1 FROM profiles WHERE id = ?", (profile_id,)).fetchone() is None:
             raise HTTPException(status_code=404, detail="profil introuvable")
+    with session() as conn:
+        conn.execute("UPDATE profiles SET status = 'draft' WHERE id = ?", (profile_id,))
     job_id = queue.enqueue("profile_from_cv", {"profile_id": profile_id, "objectif": objectif.strip()})
     return {"job_id": job_id}

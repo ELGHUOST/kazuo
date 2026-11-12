@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block head %}{% if analyse_en_cours %}<meta http-equiv="refresh" content="5">{% endif %}{% endblock %}
+{% block title %}Kazuo — {{ p.name }}{% endblock %}
+{% block content %}
+<p><a href="/profils">← Profils</a></p>
+<h2>{{ p.name }} <span class="badge {{ p.status }}">{{ libelles[p.status] }}</span></h2>
+
+{% if analyse_en_cours %}
+<div class="alerte">⏳ L'IA analyse le CV, la page se rafraîchit toute seule.
+  Attends la fin avant de modifier : son résultat remplacerait tes modifications.</div>
+{% endif %}
+{% if erreur %}<div class="erreur">{{ erreur }}</div>{% endif %}
+{% if message %}<div class="succes">{{ message }}</div>{% endif %}
+
+<form method="post" action="/profils/{{ p.id }}" class="carte">
+  <label>Nom du profil <input type="text" name="name" value="{{ p.name }}" required></label>
+  <label>Prénom <input type="text" name="first_name" value="{{ p.first_name }}" required></label>
+  <label>Ville <input type="text" name="city" value="{{ p.city }}" required></label>
+  <label>Rayon (km) <input type="number" name="radius_km" value="{{ p.radius_km }}" min="5" max="100" required></label>
+
+  <label>Recherches <span class="aide">— une par ligne : ce qui sera tapé dans Adzuna et France Travail</span>
+    <textarea name="keywords">{{ p.keywords|join("\n") }}</textarea></label>
+  <label>Mots exclus <span class="aide">— un par ligne : une offre dont le TITRE en contient un sera écartée</span>
+    <textarea name="excluded">{{ p.excluded|join("\n") }}</textarea></label>
+  <label>Métiers visés <span class="aide">— un par ligne : servent à l'IA pour noter les offres</span>
+    <textarea name="jobs">{{ p.jobs|join("\n") }}</textarea></label>
+  <label>Codes ROME <span class="aide">— un par ligne, format A1234 (à vérifier)</span>
+    <textarea name="rome_codes" style="min-height:3rem">{{ p.rome_codes|join("\n") }}</textarea></label>
+
+  <label>Contrats</label>
+  {% for c in contrats_possibles %}
+  <label style="display:inline-block;font-weight:400;margin-right:1rem">
+    <input type="checkbox" name="contracts" value="{{ c }}" {% if c in p.contracts %}checked{% endif %}> {{ c }}</label>
+  {% endfor %}
+
+  <label>CV condensé <span class="aide">— envoyé à l'IA pour CHAQUE notation : vérifie qu'il est exact</span>
+    <textarea name="cv_summary" style="min-height:12rem">{{ p.cv_summary or "" }}</textarea></label>
+
+  <button name="action" value="enregistrer">Enregistrer</button>
+  {% if p.status != "active" %}<button name="action" value="activer">Enregistrer et activer</button>{% endif %}
+  {% if p.status == "active" %}<button name="action" value="pause" class="secondaire">Mettre en pause</button>{% endif %}
+</form>
+
+<form method="post" action="/profils/{{ p.id }}/analyse" class="carte">
+  <label>Relancer l'analyse du CV par l'IA
+    <span class="aide">— remplace la fiche et repasse le profil en brouillon</span>
+    <input type="text" name="objectif" placeholder="Objectif du profil, en une ou deux phrases"></label>
+  <button class="secondaire">Relancer l'analyse</button>
+</form>
+{% endblock %}

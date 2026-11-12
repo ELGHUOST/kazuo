@@ -121,7 +121,7 @@ def profile_from_cv(payload: dict) -> dict:
         conn.execute(
             """UPDATE profiles SET jobs = ?, keywords = ?, excluded = ?, rome_codes = ?,
                                    contracts = ?, cv_summary = ?, updated_at = ?
-               WHERE id = ?""",
+               WHERE id = ? AND status = 'draft'""",
             (dumps(fiche.metiers), dumps(fiche.recherches), dumps(fiche.mots_exclus),
              dumps(fiche.codes_rome), dumps(fiche.contrats), fiche.cv_condense.en_texte(),
              datetime.now(timezone.utc).isoformat(timespec="seconds"), payload["profile_id"]),

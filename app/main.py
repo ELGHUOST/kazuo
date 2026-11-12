@@ -14,7 +14,9 @@ from app.config import settings
 from app.db import migrate, session
 from app.llm import queue, tasks  # noqa: F401  (tasks enregistre les types de tâches)
 from app.routers import llm as llm_router
+from app.routers import pages_profils
 from app.routers import profiles as profiles_router
+from app.web import templates
 
 TZ = ZoneInfo(settings.tz)
 
@@ -34,26 +36,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Kazuo", version="0.1.0", lifespan=lifespan)
 app.include_router(llm_router.router)
 app.include_router(profiles_router.router)
-templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
-
-
-def paris(iso: str | None) -> str:
-    """'2026-11-11T04:12:42Z' (UTC) → '11/11/2026 05:12' (heure de Paris)."""
-    if not iso:
-        return "date inconnue"
-    try:
-        return datetime.fromisoformat(iso).astimezone(TZ).strftime("%d/%m/%Y %H:%M")
-    except ValueError:
-        return iso
-
-
-def safe_url(url: str | None) -> str:
-    """N'autorise que les liens http(s) : une source ne doit pas pouvoir injecter un lien javascript:."""
-    return url if url and url.startswith(("https://", "http://")) else "#"
-
-
-templates.env.filters["paris"] = paris
-templates.env.filters["safe_url"] = safe_url
+app.include_router(pages_profils.router)
 
 
 def _check_ollama() -> dict:

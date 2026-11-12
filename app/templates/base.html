@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% block head %}{% endblock %}
+  <title>{% block title %}Kazuo{% endblock %}</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 860px; margin: 0 auto; padding: 1rem; background: #f5f6f8; color: #1d2330; }
+    nav { display: flex; gap: 1rem; align-items: baseline; margin-bottom: 1rem; }
+    nav .logo { font-weight: 700; font-size: 1.3rem; margin-right: 1rem; }
+    nav a { color: #1a4fd6; text-decoration: none; }
+    .carte { background: #fff; border-radius: 10px; padding: .9rem 1rem; margin: .8rem 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .ligne { color: #5b6475; font-size: .92rem; margin-top: .3rem; }
+    .desc { font-size: .9rem; color: #333a47; margin-top: .5rem; }
+    .badge { display: inline-block; font-size: .72rem; padding: .1rem .45rem; border-radius: 6px; background: #e8edf8; color: #1a4fd6; margin-right: .4rem; vertical-align: middle; }
+    .badge.draft { background: #fff3cd; color: #8a6100; }
+    .badge.active { background: #d9f2e3; color: #17663a; }
+    .badge.paused { background: #eceef2; color: #5b6475; }
+    .alerte { background: #fff3cd; border-radius: 8px; padding: .6rem .8rem; margin: .8rem 0; }
+    .succes { background: #d9f2e3; border-radius: 8px; padding: .6rem .8rem; margin: .8rem 0; }
+    .erreur { background: #fde2e1; color: #8a1c1c; border-radius: 8px; padding: .6rem .8rem; margin: .8rem 0; }
+    label { display: block; font-weight: 600; margin-top: .9rem; }
+    .aide { font-weight: 400; color: #5b6475; font-size: .85rem; }
+    input[type=text], input[type=number], textarea { width: 100%; box-sizing: border-box; padding: .45rem; border: 1px solid #c9ced8; border-radius: 6px; font: inherit; }
+    textarea { min-height: 6rem; }
+    button { margin-top: 1rem; padding: .5rem .9rem; border: 0; border-radius: 6px; background: #1a4fd6; color: #fff; font: inherit; cursor: pointer; }
+    button.secondaire { background: #e8edf8; color: #1a4fd6; }
+    a.titre { color: #1a4fd6; font-weight: 600; text-decoration: none; }
+    details { margin-top: .4rem; font-size: .9rem; }
+    footer { color: #8a92a3; font-size: .85rem; margin: 2rem 0 1rem; }
+  </style>
+</head>
+<body>
+  <nav><span class="logo">Kazuo</span><a href="/">Offres</a><a href="/profils">Profils</a></nav>
+  {% block content %}{% endblock %}
+  <footer><a href="/health">/health</a> · <a href="/docs">/docs</a></footer>
+</body>
+</html>
