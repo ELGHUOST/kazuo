@@ -31,11 +31,37 @@ from pydantic import BaseModel, Field, StringConstraints, field_validator
 CodeRome = Annotated[str, StringConstraints(pattern=r"^[A-N][0-9]{4}$")]
 
 
+class Experience(BaseModel):
+    poste: str
+    employeur: str
+    realisation: str = Field(description="ce qui a été fait, en une ligne")
+
+
+class CvCondense(BaseModel):
+    """Extrait structuré du CV. Aucun champ pour un nom ou des coordonnées : impossible de les y mettre."""
+    formation: list[str] = Field(max_length=3, description="diplôme, établissement, statut exact (obtenu / en cours)")
+    experiences: list[Experience] = Field(max_length=4)
+    competences: list[str] = Field(max_length=15, description="compétences techniques, 1 à 3 mots chacune")
+    certifications: list[str] = Field(max_length=6)
+    langues: list[str] = Field(max_length=6, description="langue et niveau, ex. « anglais C1 »")
+
+    def en_texte(self) -> str:
+        """Version compacte, celle qui sera envoyée dans les prompts de notation."""
+        lignes = [
+            "Formation : " + " ; ".join(self.formation),
+            "Expériences : " + " ; ".join(f"{e.poste} ({e.employeur}) : {e.realisation}" for e in self.experiences),
+            "Compétences : " + ", ".join(self.competences),
+            "Certifications : " + ", ".join(self.certifications),
+            "Langues : " + ", ".join(self.langues),
+        ]
+        return "\n".join(l for l in lignes if not l.endswith(": "))
+
+
 class FicheProfil(BaseModel):
-    metiers: list[str] = Field(min_length=1, max_length=6, description="intitulés de métiers visés")
+    metiers: list[str] = Field(min_length=1, max_length=6, description="intitulés de métiers, sans type de contrat")
     recherches: list[str] = Field(
         min_length=3, max_length=8,
-        description="requêtes à taper dans un moteur d'offres : intitulés de poste de 1 à 4 mots, "
+        description="requêtes à taper dans un moteur d'offres : intitulés de poste de 2 à 5 mots, "
                     "jamais un nom de technologie")
     mots_exclus: list[str] = Field(
         max_length=8,
@@ -43,7 +69,7 @@ class FicheProfil(BaseModel):
                     "un contrat ni un mode de travail")
     codes_rome: list[CodeRome] = Field(max_length=5, description="codes ROME, seulement si certain")
     contrats: list[Literal["CDI", "CDD", "intérim", "alternance", "stage", "freelance"]] = Field(min_length=1)
-    cv_condense: str = Field(description="résumé factuel du CV seul, 120 mots maximum")
+    cv_condense: CvCondense
 
     @field_validator("metiers", "recherches", "mots_exclus", "codes_rome", "contrats")
     @classmethod
@@ -62,19 +88,18 @@ SYSTEME_PROFIL = (
     "Tu aides un candidat à paramétrer une recherche d'emploi automatique en France. "
     "À partir de son CV et de l'objectif du profil, propose une fiche. Règles : "
     "1) N'invente rien : uniquement ce que disent le CV et l'objectif. "
-    "2) « recherches » : des intitulés de poste tels qu'on les tape dans un moteur d'offres "
-    "(ex. « technicien systèmes et réseaux », « administrateur réseau »), jamais un nom de logiciel "
-    "ou de technologie. Si l'objectif mentionne l'alternance, ajoute une ou deux recherches "
+    "2) « metiers » : des intitulés de métier, sans mention de contrat. "
+    "3) « recherches » : des intitulés de poste de 2 à 5 mots, tels qu'on les tape dans un moteur "
+    "d'offres (ex. « technicien systèmes et réseaux », « administrateur réseau »), jamais un mot seul "
+    "ni un nom de technologie. Si l'objectif mentionne l'alternance, ajoute une ou deux recherches "
     "contenant le mot « alternance ». "
-    "3) « mots_exclus » : peu nombreux, uniquement des termes qui désignent un AUTRE métier que celui "
+    "4) « mots_exclus » : peu nombreux, uniquement des termes qui désignent un AUTRE métier que celui "
     "visé (ex. pour un profil réseaux informatiques : « eau potable », « électricien », « plomberie »). "
-    "Jamais un niveau (senior, junior), un type de contrat ni un mode de travail (télétravail). "
-    "En cas de doute, n'exclus pas. "
-    "4) « contrats » : conformes à l'objectif ; l'alternance seulement si l'objectif la mentionne. "
-    "5) Codes ROME : seulement si tu en es certain, sinon une liste vide. "
-    "6) « cv_condense » : résumé factuel du CV SEUL (formation, expériences, compétences, "
-    "certifications, langues), 120 mots maximum, sans coordonnées personnelles, sans adjectif "
-    "valorisant, sans reprendre l'objectif. "
+    "Jamais un niveau, un type de contrat ni un mode de travail. En cas de doute, n'exclus pas. "
+    "5) « contrats » : conformes à l'objectif ; l'alternance seulement si l'objectif la mentionne. "
+    "6) Codes ROME : seulement si tu en es certain, sinon une liste vide. "
+    "7) « cv_condense » : extrait du CV SEUL, formulations courtes, sans phrase. Pour la formation, "
+    "reprends le statut exact écrit dans le CV (obtenu, en cours). "
     "Réponds uniquement avec le JSON demandé."
 )
 
@@ -98,7 +123,7 @@ def profile_from_cv(payload: dict) -> dict:
                                    contracts = ?, cv_summary = ?, updated_at = ?
                WHERE id = ?""",
             (dumps(fiche.metiers), dumps(fiche.recherches), dumps(fiche.mots_exclus),
-             dumps(fiche.codes_rome), dumps(fiche.contrats), fiche.cv_condense,
+             dumps(fiche.codes_rome), dumps(fiche.contrats), fiche.cv_condense.en_texte(),
              datetime.now(timezone.utc).isoformat(timespec="seconds"), payload["profile_id"]),
         )
     return {"fiche": fiche.model_dump(), "stats": stats}
