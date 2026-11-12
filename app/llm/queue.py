@@ -68,7 +68,7 @@ def _finish(job_id: int, *, result: dict | None = None, error: str | None = None
     status = "pending" if retry else ("error" if error else "done")
     with session() as conn:
         conn.execute(
-            """UPDATE llm_jobs SET status = ?, result = ?, error = ?, finished_at = ?, duration_s = ?
+            """UPDATE llm_jobs SET status = ?, result = ?, error = COALESCE(?, error), finished_at = ?, duration_s = ?
                WHERE id = ?""",
             (status, json.dumps(result, ensure_ascii=False) if result is not None else None,
              error, None if retry else _now(), duree, job_id),

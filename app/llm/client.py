@@ -25,7 +25,7 @@ def _extract_json(text: str) -> str:
 
 
 def chat_json(system: str, user: str, schema: type[T], *, think: str = "low",
-              temperature: float = 0.2, use_format: bool = True,
+              temperature: float = 0.2, use_format: bool = True, max_tokens: int = 800,
               timeout: float = 300) -> tuple[T, dict]:
     """Envoie un prompt à Ollama et renvoie (réponse validée, statistiques).
 
@@ -43,7 +43,7 @@ def chat_json(system: str, user: str, schema: type[T], *, think: str = "low",
         "think": think,
         "stream": False,
         "keep_alive": -1,
-        "options": {"temperature": temperature},
+        "options": {"temperature": temperature, "num_predict": max_tokens},
     }
     if use_format:
         body["format"] = schema.model_json_schema()
@@ -56,6 +56,8 @@ def chat_json(system: str, user: str, schema: type[T], *, think: str = "low",
     except (httpx.HTTPError, ValueError) as e:
         raise LLMError(f"Ollama injoignable ou en erreur : {type(e).__name__}: {e}") from e
 
+    if data.get("done_reason") == "length":
+        raise LLMError(f"Réponse tronquée : limite de {max_tokens} jetons atteinte (emballement probable)")
     content = data.get("message", {}).get("content", "")
     try:
         result = schema.model_validate_json(_extract_json(content))

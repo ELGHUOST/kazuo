@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from app.db import session
+from app.llm import queue
 from app.services import profiles
 
 router = APIRouter(prefix="/api/profiles", tags=["Profils"])
@@ -51,3 +52,13 @@ def detail_profil(profile_id: int) -> dict:
     if row is None:
         raise HTTPException(status_code=404, detail="profil introuvable")
     return _profil(row)
+
+
+@router.post("/{profile_id}/analyse")
+def relancer_analyse(profile_id: int, objectif: Annotated[str, Form()] = "") -> dict:
+    """Relance l'analyse du CV par l'IA (par exemple avec un objectif), sans renvoyer le PDF."""
+    with session() as conn:
+        if conn.execute("SELECT 1 FROM profiles WHERE id = ?", (profile_id,)).fetchone() is None:
+            raise HTTPException(status_code=404, detail="profil introuvable")
+    job_id = queue.enqueue("profile_from_cv", {"profile_id": profile_id, "objectif": objectif.strip()})
+    return {"job_id": job_id}
