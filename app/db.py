@@ -70,6 +70,22 @@ MIGRATIONS = [
     );
     CREATE INDEX idx_llm_jobs_queue ON llm_jobs (status, priority DESC, id);
     """,
+    # v3 : rattachement offre × profil (sert aussi à la notation et au swipe)
+    """
+    CREATE TABLE matches (
+        offer_id    INTEGER NOT NULL REFERENCES offers(id) ON DELETE CASCADE,
+        profile_id  INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+        query       TEXT NOT NULL,                 -- la recherche qui a trouvé l'offre
+        found_at    TEXT NOT NULL,
+        excluded_by TEXT,                          -- mot exclu trouvé dans le titre ; NULL = retenue
+        score       INTEGER CHECK (score BETWEEN 0 AND 10),   -- phase 3
+        explanation TEXT,                                     -- phase 3
+        decision    TEXT CHECK (decision IN ('like', 'nope')),-- phase 4 (swipe)
+        decided_at  TEXT,
+        PRIMARY KEY (offer_id, profile_id)
+    );
+    CREATE INDEX idx_matches_profile ON matches (profile_id, excluded_by);
+    """,
 ]
 
 

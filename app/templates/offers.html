@@ -1,10 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Kazuo — offres{% endblock %}
 {% block content %}
-<p class="ligne">{{ offres|length }} offres uniques · {{ total }} annonces en base</p>
+<p class="ligne">Filtrer : <a href="/">toutes</a>{% for pr in profils %} · <a href="/?profil={{ pr.id }}">{{ pr.name }}</a>{% endfor %}</p>
+{% if profil is not none %}
+<p class="ligne">{% if exclues %}Offres écartées par les mots exclus — <a href="/?profil={{ profil }}">revenir aux offres retenues</a>
+{% else %}{{ nb_exclues }} offre(s) écartée(s) par les mots exclus — <a href="/?profil={{ profil }}&exclues=1">les voir</a>{% endif %}</p>
+{% endif %}
+<p class="ligne">{{ offres|length }} offres uniques affichées · {{ total }} annonces en base</p>
 {% for o in offres %}
 <article class="carte">
-  <span class="badge">{{ o.source }}</span>
+  <span class="badge">{{ o.source }}</span>{% if motifs.get(o.id) %}<span class="badge draft">exclue : {{ motifs[o.id] }}</span>{% endif %}
   <a class="titre" href="{{ o.url|safe_url }}" target="_blank" rel="noopener noreferrer">{{ o.title }}</a>
   <div class="ligne">{{ o.company or "Entreprise non précisée" }} · {{ o.location or "Lieu non précisé" }}</div>
   <div class="ligne">{{ o.contract or "Contrat non précisé" }} · {{ o.salary or "Salaire non précisé" }} · publiée le {{ o.published_at|paris }}</div>

@@ -68,26 +68,43 @@ def health() -> dict:
 
 
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request):
-    """Liste des offres : une carte par empreinte, les doublons sont regroupés dessous."""
+def index(request: Request, profil: int | None = None, exclues: bool = False):
+    """Liste des offres, une carte par empreinte. Filtre facultatif : ?profil=1 (&exclues=1)."""
+    filtre, args = "", ()
+    if profil is not None:
+        # La condition vient d'une constante choisie ici ; la valeur passe par un « ? »
+        cond = "IS NOT NULL" if exclues else "IS NULL"
+        filtre = f"WHERE id IN (SELECT offer_id FROM matches WHERE profile_id = ? AND excluded_by {cond})"
+        args = (profil,)
     with session() as conn:
         total = conn.execute("SELECT COUNT(*) FROM offers").fetchone()[0]
+        profils = conn.execute("SELECT id, name, status FROM profiles ORDER BY id").fetchall()
+        nb_exclues = 0
+        motifs: dict[int, str] = {}
+        if profil is not None:
+            nb_exclues = conn.execute(
+                "SELECT COUNT(*) FROM matches WHERE profile_id = ? AND excluded_by IS NOT NULL", (profil,)
+            ).fetchone()[0]
+            motifs = {r["offer_id"]: r["excluded_by"] for r in conn.execute(
+                "SELECT offer_id, excluded_by FROM matches WHERE profile_id = ? AND excluded_by IS NOT NULL",
+                (profil,))}
         offres = conn.execute(
-            """SELECT * FROM (
-                   SELECT o.*,
-                          COUNT(*) OVER (PARTITION BY fingerprint) AS nb,
-                          ROW_NUMBER() OVER (PARTITION BY fingerprint
-                                             ORDER BY published_at DESC, id DESC) AS rang
-                   FROM offers AS o)
-               WHERE rang = 1
-               ORDER BY published_at DESC
-               LIMIT 300"""
-        ).fetchall()
+            f"""SELECT * FROM (
+                    SELECT o.*,
+                           COUNT(*) OVER (PARTITION BY fingerprint) AS nb,
+                           ROW_NUMBER() OVER (PARTITION BY fingerprint
+                                              ORDER BY published_at DESC, id DESC) AS rang
+                    FROM (SELECT * FROM offers {filtre}) AS o)
+                WHERE rang = 1
+                ORDER BY published_at DESC
+                LIMIT 300""", args).fetchall()
         groupes: dict[str, list] = {}
         for r in conn.execute(
-            "SELECT fingerprint, location, url, published_at FROM offers ORDER BY published_at DESC"
+            f"SELECT fingerprint, location, url, published_at FROM offers {filtre} ORDER BY published_at DESC",
+            args,
         ):
             groupes.setdefault(r["fingerprint"], []).append(r)
-    return templates.TemplateResponse(
-        request, "offers.html", {"offres": offres, "groupes": groupes, "total": total}
-    )
+    return templates.TemplateResponse(request, "offers.html", {
+        "offres": offres, "groupes": groupes, "total": total, "profils": profils,
+        "profil": profil, "exclues": exclues, "nb_exclues": nb_exclues, "motifs": motifs,
+    })

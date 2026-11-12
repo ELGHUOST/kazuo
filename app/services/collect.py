@@ -1,24 +1,40 @@
-"""Collecte des offres : interroge les sources et enregistre les nouvelles offres."""
+"""Collecte des offres : pour chaque profil actif, chaque recherche, chaque source."""
 import argparse
 import json
+import logging
 import time
 from datetime import datetime, timezone
 
 import httpx
 
 from app.db import migrate, session
-from app.dedup import fingerprint
+from app.dedup import fingerprint, normalize
 from app.sources import adzuna
 from app.sources.base import Offer
 
-# Phase 1 : recherches de test. En phase 3, elles viendront des profils.
-RECHERCHES = ["technicien réseau", "technicien informatique", "employé polyvalent"]
+log = logging.getLogger("kazuo.collect")
+
+MAX_RECHERCHES = 25  # garde-fou : au plus 25 recherches par collecte (≤ 75 appels Adzuna)
 
 
-def save(offers: list[Offer]) -> int:
-    """Enregistre les offres, ignore celles déjà connues. Renvoie le nombre de nouvelles."""
-    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    nouvelles = 0
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def mot_exclu(titre: str, exclus: list[str]) -> str | None:
+    """Premier mot exclu présent dans le titre (mots entiers, sans tenir compte de la casse ni des accents)."""
+    t = f" {normalize(titre)} "
+    for mot in exclus:
+        m = normalize(mot)
+        if m and f" {m} " in t:
+            return mot
+    return None
+
+
+def save(offers: list[Offer], profile: dict | None = None, query: str = "") -> dict:
+    """Enregistre les offres et, si un profil est donné, les rattache à ce profil."""
+    now = _now()
+    stats = {"recues": len(offers), "nouvelles": 0, "rattachees": 0, "exclues": 0}
     with session() as conn:
         for o in offers:
             cur = conn.execute(
@@ -30,25 +46,70 @@ def save(offers: list[Offer]) -> int:
                  o.company, o.location, o.contract, o.salary, o.description, o.url,
                  o.published_at, now, json.dumps(o.raw, ensure_ascii=False)),
             )
-            nouvelles += cur.rowcount  # 1 si insérée, 0 si ignorée (déjà en base)
-    return nouvelles
+            stats["nouvelles"] += cur.rowcount
+            if profile is None:
+                continue
+            offer_id = conn.execute("SELECT id FROM offers WHERE source = ? AND source_id = ?",
+                                    (o.source, o.source_id)).fetchone()["id"]
+            exclu = mot_exclu(o.title, profile["excluded"])
+            cur = conn.execute(
+                """INSERT OR IGNORE INTO matches (offer_id, profile_id, query, found_at, excluded_by)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (offer_id, profile["id"], query, now, exclu),
+            )
+            if cur.rowcount:
+                stats["rattachees"] += 1
+                stats["exclues"] += exclu is not None
+    return stats
+
+
+def profils_actifs(profile_id: int | None = None) -> list[dict]:
+    sql = "SELECT id, name, city, radius_km, keywords, excluded FROM profiles WHERE status = 'active'"
+    args: tuple = ()
+    if profile_id is not None:
+        sql += " AND id = ?"
+        args = (profile_id,)
+    with session() as conn:
+        rows = conn.execute(sql, args).fetchall()
+    return [{**dict(r), "keywords": json.loads(r["keywords"]), "excluded": json.loads(r["excluded"])}
+            for r in rows]
+
+
+def run(jours: int | None = 1, profile_id: int | None = None) -> list[dict]:
+    """Une collecte complète. Sera aussi appelée par le planificateur de 7h30 (phase 3)."""
+    migrate()
+    taches = [(p, q) for p in profils_actifs(profile_id) for q in p["keywords"]]
+    if len(taches) > MAX_RECHERCHES:
+        log.warning("%s recherches demandées, limitées à %s", len(taches), MAX_RECHERCHES)
+        taches = taches[:MAX_RECHERCHES]
+    bilan = []
+    for i, (p, q) in enumerate(taches):
+        if i:
+            time.sleep(adzuna.PAUSE_S)  # on espace les recherches entre elles
+        try:
+            offers = adzuna.search(q, where=p["city"], distance_km=p["radius_km"], max_days_old=jours)
+            stats = save(offers, p, q)
+        except (adzuna.AdzunaError, httpx.HTTPError) as e:
+            log.warning("[adzuna] %s / « %s » : %s", p["name"], q, e)
+            stats = {"erreur": str(e)}  # une recherche en échec ne bloque pas les autres
+        bilan.append({"source": "adzuna", "profil": p["name"], "recherche": q, **stats})
+    return bilan
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Collecte manuelle des offres")
-    p.add_argument("--jours", type=int, default=None, help="seulement les offres des N derniers jours")
-    args = p.parse_args()
-
-    print(f"Base : schéma v{migrate()}")
-    for i, q in enumerate(RECHERCHES):
-        if i:
-            time.sleep(adzuna.PAUSE_S)  # on espace aussi les recherches entre elles
-        try:
-            offers = adzuna.search(q, max_days_old=args.jours)
-        except (adzuna.AdzunaError, httpx.HTTPError) as e:
-            print(f"[adzuna] « {q} » : ERREUR — {e}")
-            continue  # une recherche en échec ne bloque pas les autres
-        print(f"[adzuna] « {q} » : {len(offers)} reçues, {save(offers)} nouvelles")
+    a = argparse.ArgumentParser(description="Collecte des offres pour les profils actifs")
+    a.add_argument("--jours", type=int, default=1, help="offres des N derniers jours (défaut : 1)")
+    a.add_argument("--profil", type=int, help="un seul profil (id)")
+    args = a.parse_args()
+    bilan = run(args.jours, args.profil)
+    if not bilan:
+        print("Aucun profil actif : rien à collecter.")
+    for b in bilan:
+        if "erreur" in b:
+            print(f"[{b['source']}] {b['profil']} / « {b['recherche']} » : ERREUR — {b['erreur']}")
+        else:
+            print(f"[{b['source']}] {b['profil']} / « {b['recherche']} » : {b['recues']} reçues, "
+                  f"{b['nouvelles']} nouvelles, {b['rattachees']} rattachées dont {b['exclues']} exclues")
 
 
 if __name__ == "__main__":
