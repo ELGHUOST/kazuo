@@ -18,6 +18,8 @@ from app.routers import pages_profils
 from app.routers import profiles as profiles_router
 from app.routers import swipe as swipe_router
 from app.routers import pages_swipe
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
 from app.web import templates
 
 TZ = ZoneInfo(settings.tz)
@@ -39,6 +41,7 @@ app = FastAPI(title="Kazuo", version="0.1.0", lifespan=lifespan)
 app.include_router(llm_router.router)
 app.include_router(swipe_router.router)
 app.include_router(pages_swipe.router)
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 app.include_router(profiles_router.router)
 app.include_router(pages_profils.router)
 

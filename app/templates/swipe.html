@@ -3,117 +3,248 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0f172a">
+<meta name="theme-color" content="#17133d">
 <title>Kazuo · Swipe</title>
+<link rel="preload" href="/static/fonts/dela-gothic-one.woff2" as="font" type="font/woff2" crossorigin>
 {% raw %}
 <style>
-  :root { --fond: #0f172a; --texte: #0f172a; --doux: #64748b; --like: #16a34a; --nope: #dc2626; --info: #2563eb; }
+  @font-face {
+    font-family: "Dela Gothic One";
+    src: url("/static/fonts/dela-gothic-one.woff2") format("woff2");
+    font-display: swap;
+  }
+  :root {
+    /* Les 6 couleurs de la page : change-les ici, tout suit */
+    --ai: #17133d;      /* 藍 indigo : la nuit */
+    --sumi: #0e0c1d;    /* 墨 encre : traits et contours */
+    --washi: #fbf7ee;   /* 和紙 papier : la planche de manga */
+    --shu: #ff3b2f;     /* 朱 vermillon : le sceau, « retenue » */
+    --neon: #3ef2ff;    /* néon : la touche cyber */
+    --kin: #f5c542;     /* 金 or : le salaire, l'annulation */
+    --gris: #4a4668;    /* texte secondaire sur papier */
+    --display: "Dela Gothic One", "Hiragino Sans", "Noto Sans CJK JP", system-ui, sans-serif;
+    --texte: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
   html, body { margin: 0; height: 100%; }
   body {
     display: flex; flex-direction: column; height: 100dvh; overflow: hidden; overscroll-behavior: none;
-    background: var(--fond); color: #e2e8f0; -webkit-tap-highlight-color: transparent;
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: radial-gradient(120% 55% at 50% 112%, rgba(62, 242, 255, .22), transparent 62%), var(--ai);
+    color: var(--washi); font-family: var(--texte); -webkit-tap-highlight-color: transparent;
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   }
-  header { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .6rem .9rem .3rem; }
-  header a { color: #93c5fd; text-decoration: none; font-weight: 600; }
-  header form { display: flex; gap: .4rem; margin-left: auto; }
-  header select { font-size: 16px; padding: .25rem .4rem; border: 1px solid #334155; border-radius: 8px; background: #1e293b; color: #e2e8f0; }
-  #compteurs { width: 100%; color: #94a3b8; font-size: .85rem; }
-  #pile { position: relative; flex: 1; min-height: 0; margin: .3rem .9rem 0; }
-  #vide { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1rem; text-align: center; }
-  #vide .gros { margin: 0 0 .5rem; font-size: 1.3rem; font-weight: 700; }
-  #vide a { color: #93c5fd; }
+  body::before {        /* trame de points (screentone) qui monte du bas de l'écran */
+    content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background: radial-gradient(circle, rgba(251, 247, 238, .11) 1.2px, transparent 1.7px) 0 0 / 8px 8px;
+    -webkit-mask-image: linear-gradient(to top, #000, transparent 55%);
+            mask-image: linear-gradient(to top, #000, transparent 55%);
+  }
+  :focus-visible { outline: 3px solid var(--neon); outline-offset: 3px; }
+
+  header, #pile, #actions { width: min(100% - 2rem, 34rem); margin-inline: auto; }
+
+  /* ---------- En-tête ---------- */
+  header { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: .55rem .8rem; padding: .7rem 0 .4rem; }
+  .logo { font-family: var(--display); font-size: clamp(1.3rem, 6vw, 1.65rem); line-height: 1; color: var(--washi); text-decoration: none;
+          letter-spacing: .04em; text-shadow: 3px 3px 0 var(--shu); }
+  header form { justify-self: end; display: flex; justify-content: flex-end; gap: .4rem; min-width: 0; }
+  header select { min-width: 0; font: inherit; font-size: 16px; padding: .25rem .35rem; border: 2px solid rgba(251, 247, 238, .28);
+                  border-radius: 8px; background: #221d55; color: var(--washi); }
+  .compteurs { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: .45rem; }
+  .pastille { padding: .15rem .65rem; border: 2px solid rgba(251, 247, 238, .22); border-radius: 999px; color: #cfcaf0; font-size: .85rem; }
+  .pastille b { margin-right: .25rem; font-family: var(--display); font-weight: 400; color: var(--washi); }
+  .pastille.ret b { color: var(--shu); }
+  .pastille.ecart b { color: #b9b6dc; }
+
+  /* ---------- La pile et la carte (une planche de manga) ---------- */
+  #pile { position: relative; flex: 1; min-height: 0; margin-top: .5rem; }
   .carte {
-    position: absolute; inset: 0; display: flex; flex-direction: column; overflow: hidden;
-    background: #fff; color: var(--texte); border-radius: 18px; box-shadow: 0 10px 30px rgba(0,0,0,.35);
-    transition: transform .25s ease, opacity .25s ease; will-change: transform;
+    --ombre: var(--neon); --force: 0;
+    position: absolute; inset: 0 10px 10px 0; display: flex; flex-direction: column; overflow: hidden;
+    background: var(--washi); color: var(--sumi); border: 3px solid var(--sumi); border-radius: 10px;
+    box-shadow: calc(7px + var(--force) * 6px) calc(7px + var(--force) * 6px) 0 var(--ombre);
+    transition: transform .25s ease, opacity .25s ease, box-shadow .2s ease; will-change: transform;
     user-select: none; -webkit-user-select: none;
   }
+  .carte[data-sens="droite"] { --ombre: var(--shu); }
+  .carte[data-sens="gauche"] { --ombre: #8c89b3; }
   .carte, .carte * { touch-action: pan-y; }
   .carte a { -webkit-user-drag: none; }
-  .carte.dessous { transform: scale(.95) translateY(10px); opacity: .6; pointer-events: none; }
+  .carte.dessous { transform: scale(.95) translateY(12px); opacity: .55; pointer-events: none; }
   .carte.glisse { transition: none; }
-  .carte.sortie { opacity: 0; pointer-events: none; transition: transform .3s ease-in, opacity .3s ease-in; }
-  .tampon { position: absolute; top: 1.1rem; z-index: 2; padding: .1rem .6rem; border: 4px solid; border-radius: 10px;
-            background: rgba(255,255,255,.85); font-size: 1.5rem; font-weight: 800; letter-spacing: .05em; opacity: 0; pointer-events: none; }
-  .tampon.like { left: 1rem; color: var(--like); transform: rotate(-12deg); }
-  .tampon.nope { right: 1rem; color: var(--nope); transform: rotate(12deg); }
-  .entete { padding: 1rem 1rem .7rem; border-bottom: 1px solid #e2e8f0; }
-  .ligne { display: flex; gap: .7rem; align-items: flex-start; }
-  .ligne > div { min-width: 0; }
-  .note { flex: none; display: grid; place-items: center; width: 2.7rem; height: 2.7rem; border-radius: 50%;
-          color: #fff; font-size: 1.2rem; font-weight: 800; }
-  .n-haute { background: #16a34a; } .n-moyenne { background: #0891b2; } .n-basse { background: #d97706; } .n-faible { background: #94a3b8; }
-  .titre { margin: 0; font-size: 1.1rem; line-height: 1.3; overflow-wrap: anywhere; }
-  .societe { margin-top: .15rem; color: var(--doux); }
-  .puces { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .6rem; }
-  .puce { padding: .15rem .6rem; border-radius: 999px; background: #f1f5f9; color: #334155; font-size: .8rem; }
-  .puce:empty, .explication:empty, .facteurs:empty { display: none; }
-  .corps { flex: 1; min-height: 0; overflow-y: auto; padding: .8rem 1rem; }
-  .explication { margin: 0 0 .4rem; padding: .5rem .7rem; border-left: 4px solid var(--info); border-radius: 6px; background: #eff6ff; }
-  .facteurs { margin: 0 0 .8rem; color: var(--doux); font-size: .8rem; }
-  .description { margin: 0; color: #334155; font-size: .9rem; line-height: 1.45; white-space: pre-line; }
-  .pied { padding: .7rem 1rem; border-top: 1px solid #e2e8f0; }
-  .pied a { color: var(--info); font-weight: 600; text-decoration: none; }
-  #actions { display: flex; justify-content: center; align-items: center; gap: 1.5rem; padding: .9rem 0 1rem; }
-  #actions button { width: 4rem; height: 4rem; border: 0; border-radius: 50%; background: #fff; font-size: 1.7rem;
-                    box-shadow: 0 4px 12px rgba(0,0,0,.3); cursor: pointer; touch-action: manipulation; }
-  #actions #b-annuler { width: 3rem; height: 3rem; color: #475569; font-size: 1.3rem; }
-  #b-nope { color: var(--nope); } #b-like { color: var(--like); }
+  .carte.sortie { pointer-events: none; }
+  .carte.envol { opacity: 0; transition: transform .35s ease-in, opacity .35s ease-in; }
+
+  .entete { position: relative; padding: 1rem 1rem .85rem; border-bottom: 3px solid var(--sumi); }
+  .entete::before {     /* trame derrière le sceau, qui s'efface sous le titre */
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(circle, rgba(14, 12, 29, .2) 1.1px, transparent 1.6px) 0 0 / 7px 7px;
+    -webkit-mask-image: linear-gradient(to left, #000 10%, transparent 75%);
+            mask-image: linear-gradient(to left, #000 10%, transparent 75%);
+  }
+  .entete > * { position: relative; }
+  .ligne { display: flex; align-items: flex-start; gap: .8rem; }
+  .titres { flex: 1; min-width: 0; }
+  .titre { margin: 0; font-family: var(--display); font-weight: 400; font-size: 1.22rem; line-height: 1.25; overflow-wrap: anywhere; }
+  .societe { margin: .35rem 0 0; font-weight: 700; color: var(--gris); }
+
+  .sceau { flex: none; display: flex; flex-direction: column; align-items: center; gap: .25rem; transform: rotate(-6deg); }
+  .sceau b { display: grid; place-items: center; width: 3.4rem; height: 3.4rem; border: 3px solid var(--sumi); border-radius: 50%;
+             background: var(--teinte); color: var(--encre-sceau);
+             box-shadow: inset 0 0 0 3px var(--teinte), inset 0 0 0 5px var(--washi);
+             font-family: var(--display); font-weight: 400; font-size: 1.75rem; line-height: 1; }
+  .sceau span { font-size: .75rem; font-weight: 700; color: var(--gris); }
+  .n-haute   { --teinte: var(--shu);  --encre-sceau: var(--washi); }
+  .n-moyenne { --teinte: var(--kin);  --encre-sceau: var(--sumi); }
+  .n-basse   { --teinte: var(--neon); --encre-sceau: var(--sumi); }
+  .n-faible  { --teinte: #c9c6dd;     --encre-sceau: var(--sumi); }
+
+  .puces { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .75rem; }
+  .puce { padding: .1rem .55rem; border: 2px solid var(--sumi); border-radius: 999px; background: var(--washi);
+          font-size: .78rem; font-weight: 600; }
+  .puce.salaire { background: var(--kin); }
+  .puce.profil { background: var(--ai); border-color: var(--ai); color: var(--washi); }
+  .puce:empty, .parole:empty, .facteurs:empty { display: none; }
+
+  .corps { flex: 1; min-height: 0; overflow-y: auto; padding: 1.15rem 1rem 1rem; }
+  .parole {             /* l'avis de l'IA, en bulle de manga qui pointe vers le sceau */
+    position: relative; margin: 0 0 1rem; padding: .65rem .85rem; background: #fff;
+    border: 2.5px solid var(--sumi); border-radius: 20px; font-size: .95rem; line-height: 1.45;
+  }
+  .parole::after { content: ""; position: absolute; top: -9px; right: 2.3rem; width: 15px; height: 15px; background: #fff;
+                   border-top: 2.5px solid var(--sumi); border-left: 2.5px solid var(--sumi); transform: rotate(45deg); }
+  .facteurs { display: grid; grid-template-columns: 1fr 1fr; gap: .45rem 1.2rem; }
+  .facteur { display: flex; align-items: center; justify-content: space-between; gap: .5rem; font-size: .8rem; color: var(--gris); }
+  .barre { display: flex; gap: 3px; }
+  .barre i { width: 15px; height: 9px; border: 1.5px solid var(--sumi); border-radius: 2px; transform: skewX(-20deg); }
+  .barre i.plein { background: var(--sumi); }
+  .description { margin: 1rem 0 0; color: #3c3860; font-size: .92rem; line-height: 1.55; white-space: pre-line; }
+
+  .pied { padding: .7rem 1rem .8rem; border-top: 3px solid var(--sumi); }
+  .lien { display: block; padding: .6rem; border-radius: 8px; background: var(--sumi); color: var(--washi);
+          font-family: var(--display); font-weight: 400; text-align: center; text-decoration: none; letter-spacing: .03em; }
+
+  /* ---------- Tampons (sceaux japonais) et lignes de vitesse ---------- */
+  .tampon { position: absolute; top: 5.2rem; z-index: 3; display: flex; flex-direction: column; align-items: center;
+            padding: .45rem .55rem .35rem; border: 4px double; border-radius: 8px; background: rgba(251, 247, 238, .9);
+            opacity: 0; pointer-events: none; transform: rotate(var(--angle)); }
+  .tampon b { writing-mode: vertical-rl; font-family: var(--display); font-weight: 400; font-size: 2.1rem; line-height: 1; letter-spacing: .08em; }
+  .tampon span { margin-top: .3rem; font-size: .72rem; font-weight: 800; }
+  .tampon.like { --angle: -12deg; left: 1.2rem; color: var(--shu); }
+  .tampon.nope { --angle: 12deg; right: 1.2rem; color: var(--sumi); }
+  .tampon.frappe { opacity: 1 !important; animation: frappe .2s cubic-bezier(.2, 1.5, .4, 1) both; }
+  @keyframes frappe {
+    from { opacity: 0; transform: scale(2.4) rotate(var(--angle)); }
+    to   { opacity: 1; transform: scale(1) rotate(var(--angle)); }
+  }
+  #impact {             /* 集中線 : les lignes de vitesse des mangas, une fraction de seconde */
+    --trait: var(--shu);
+    position: absolute; inset: -15%; z-index: 5; pointer-events: none; opacity: 0;
+    background: repeating-conic-gradient(from 0deg at 50% 45%, var(--trait) 0deg .7deg, transparent .7deg 4.5deg);
+    -webkit-mask-image: radial-gradient(ellipse at 50% 45%, transparent 0 36%, #000 72%);
+            mask-image: radial-gradient(ellipse at 50% 45%, transparent 0 36%, #000 72%);
+  }
+  #impact[data-sens="nope"] { --trait: var(--neon); }
+  #impact.actif { animation: impact .45s ease-out; }
+  @keyframes impact {
+    0%   { opacity: 0; transform: scale(1.25); }
+    20%  { opacity: .85; }
+    100% { opacity: 0; transform: scale(1); }
+  }
+
+  /* ---------- Pile vide ---------- */
+  #vide { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+          padding: 1rem; text-align: center; color: #cfcaf0; }
+  .kanji-fin { margin: 0; font-family: var(--display); font-size: 6rem; line-height: 1; color: var(--washi); text-shadow: 6px 6px 0 var(--shu); }
+  #vide .gros { margin: .7rem 0 .3rem; font-family: var(--display); font-size: 1.3rem; color: var(--washi); }
+  #vide p { margin: .2rem 0; }
+  #vide a { margin-top: .6rem; color: var(--neon); }
+
+  /* ---------- Boutons ---------- */
+  #actions { display: flex; justify-content: center; align-items: center; gap: 1.5rem; padding: 1rem 0 1.1rem; }
+  #actions button { display: grid; place-items: center; padding: 0; border: 3px solid var(--sumi); border-radius: 50%;
+                    cursor: pointer; touch-action: manipulation; transition: transform .08s, box-shadow .08s; }
+  #actions svg { width: 52%; height: 52%; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+  #b-nope { width: 4rem; height: 4rem; background: var(--washi); color: var(--sumi); box-shadow: 4px 4px 0 var(--neon); }
+  #b-like { width: 4.7rem; height: 4.7rem; background: var(--shu); color: var(--washi); box-shadow: 4px 4px 0 var(--kin); }
+  #b-like svg { fill: currentColor; stroke: none; }
+  #b-annuler { width: 3rem; height: 3rem; background: var(--ai); color: var(--kin); border-color: var(--kin); }
+  #actions button:active:not(:disabled) { transform: translate(4px, 4px); box-shadow: none; }
   #actions button:disabled { opacity: .35; cursor: default; }
-  #bulle { position: fixed; left: 50%; bottom: calc(6.5rem + env(safe-area-inset-bottom)); transform: translateX(-50%);
-           max-width: 90vw; padding: .5rem 1rem; border-radius: 8px; background: #1e293b; color: #fff; font-size: .9rem;
-           opacity: 0; transition: opacity .2s; pointer-events: none; }
+
+  #bulle { position: fixed; left: 50%; bottom: calc(7rem + env(safe-area-inset-bottom)); z-index: 10; max-width: 90vw;
+           padding: .5rem 1rem; border: 2.5px solid var(--sumi); border-radius: 8px; background: var(--washi); color: var(--sumi);
+           box-shadow: 4px 4px 0 var(--shu); font-size: .9rem; font-weight: 600;
+           opacity: 0; transform: translateX(-50%); transition: opacity .2s; pointer-events: none; }
   #bulle.visible { opacity: 1; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .carte, .carte.envol { transition: none !important; }
+    .tampon.frappe { animation: none; }
+    #impact { display: none; }
+  }
 </style>
 {% endraw %}
 </head>
 <body data-profil="{{ profil if profil is not none else '' }}" data-note-min="{{ note_min }}">
 <header>
-  <a href="/">← Offres</a>
+  <a class="logo" href="/" title="Retour à la liste des offres">カズオ</a>
   <form method="get" action="/swipe">
     <select name="profil" aria-label="Profil">
-      <option value="">Tous les profils</option>
+      <option value="">Tous profils</option>
       {% for p in profils %}
       <option value="{{ p.id }}"{% if p.id == profil %} selected{% endif %}>{{ p.name }}</option>
       {% endfor %}
     </select>
     <select name="note_min" aria-label="Note minimale">
-      {% for n, libelle in [(7, "Notes ≥ 7"), (5, "Notes ≥ 5"), (0, "Toutes les notes")] %}
+      {% for n, libelle in [(7, "Note ≥ 7"), (5, "Note ≥ 5"), (0, "Toutes notes")] %}
       <option value="{{ n }}"{% if n == note_min %} selected{% endif %}>{{ libelle }}</option>
       {% endfor %}
     </select>
     <noscript><button>OK</button></noscript>
   </form>
-  <div id="compteurs">&nbsp;</div>
+  <div class="compteurs">
+    <span class="pastille"><b id="c-trier">–</b>à trier</span>
+    <span class="pastille ret"><b id="c-ret">–</b>retenues</span>
+    <span class="pastille ecart"><b id="c-ecart">–</b>écartées</span>
+  </div>
 </header>
 
 <main id="pile">
   <div id="vide">
-    <p class="gros" id="vide-titre">Chargement…</p>
+    <p class="kanji-fin" id="vide-kanji" aria-hidden="true" hidden>完</p>
+    <p class="gros" id="vide-titre">Chargement des offres…</p>
     <p id="vide-texte"></p>
-    <a id="vide-lien" hidden>Voir aussi les offres moins bien notées</a>
+    <a id="vide-lien" hidden></a>
   </div>
+  <div id="impact" aria-hidden="true"></div>
 </main>
 
 <nav id="actions">
-  <button id="b-nope" type="button" aria-label="Écarter (flèche gauche)" title="Écarter (←)">✕</button>
-  <button id="b-annuler" type="button" aria-label="Annuler le dernier choix (Z)" title="Annuler (Z)">↶</button>
-  <button id="b-like" type="button" aria-label="Retenir (flèche droite)" title="Retenir (→)">♥</button>
+  <button id="b-nope" type="button" aria-label="Écarter (flèche gauche)" title="Écarter (←)">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+  </button>
+  <button id="b-annuler" type="button" aria-label="Annuler le dernier choix (Z)" title="Annuler (Z)">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5 4 10l5 5M4 10h10a6 6 0 0 1 0 12h-3"/></svg>
+  </button>
+  <button id="b-like" type="button" aria-label="Retenir (flèche droite)" title="Retenir (→)">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.6 4.3 12.9a4.6 4.6 0 0 1 6.5-6.5L12 7.6l1.2-1.2a4.6 4.6 0 0 1 6.5 6.5z"/></svg>
+  </button>
 </nav>
 <div id="bulle" role="status"></div>
 
 <template id="modele-carte">
   <article class="carte">
-    <div class="tampon like">RETENUE</div>
-    <div class="tampon nope">ÉCARTÉE</div>
+    <div class="tampon like" aria-hidden="true"><b>採用</b><span>Retenue</span></div>
+    <div class="tampon nope" aria-hidden="true"><b>見送り</b><span>Écartée</span></div>
     <div class="entete">
       <div class="ligne">
-        <div class="note"></div>
-        <div><h2 class="titre"></h2><div class="societe"></div></div>
+        <div class="titres">
+          <h2 class="titre"></h2>
+          <p class="societe"></p>
+        </div>
+        <div class="sceau" role="img"><b></b><span></span></div>
       </div>
       <div class="puces">
         <span class="puce lieu"></span><span class="puce contrat"></span><span class="puce salaire"></span>
@@ -121,11 +252,11 @@
       </div>
     </div>
     <div class="corps">
-      <p class="explication"></p>
-      <p class="facteurs"></p>
+      <p class="parole"></p>
+      <div class="facteurs"></div>
       <p class="description"></p>
     </div>
-    <div class="pied"><a class="lien" target="_blank" rel="noopener noreferrer" draggable="false">Voir l'annonce ↗</a></div>
+    <div class="pied"><a class="lien" target="_blank" rel="noopener noreferrer" draggable="false">Ouvrir l'annonce</a></div>
   </article>
 </template>
 
@@ -136,9 +267,11 @@ const API = "/api/swipe";
 const PROFIL = document.body.dataset.profil === "" ? null : Number(document.body.dataset.profil);
 const NOTE_MIN = Number(document.body.dataset.noteMin);
 const SEUIL = 0.3;                   // part de la largeur de la carte à dépasser pour valider un swipe
+const KANJI = ["〇", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十"];
+const REDUIT = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const $ = id => document.getElementById(id);
-const pile = $("pile"), vide = $("vide"), compteurs = $("compteurs"), modele = $("modele-carte");
+const pile = $("pile"), vide = $("vide"), impact = $("impact"), modele = $("modele-carte");
 const bLike = $("b-like"), bNope = $("b-nope"), bAnnuler = $("b-annuler"), bulle = $("bulle");
 
 let deck = [];                       // cartes à venir ; deck[0] est la carte du dessus
@@ -187,7 +320,9 @@ function charger() {
 async function majCompteurs() {
   try {
     const s = await appel(`${API}/stats?${requete()}`);
-    compteurs.textContent = `${s.a_trier} à trier · ♥ ${s.retenues} retenues · ✕ ${s.ecartees} écartées`;
+    $("c-trier").textContent = s.a_trier;
+    $("c-ret").textContent = s.retenues;
+    $("c-ecart").textContent = s.ecartees;
   } catch { /* simple indicateur : il sera remis à jour au prochain geste */ }
 }
 
@@ -207,31 +342,50 @@ function depuis(iso) {
   return jours < 1 ? "aujourd'hui" : jours === 1 ? "hier" : `il y a ${jours} j`;
 }
 
-function facteurs(f) {
-  if (!f) return "";
-  return `métier ${f.metier}/3 · niveau ${f.niveau}/2 · compétences ${f.competences}/3 · contrat ${f.contrat ? "✓" : "✗"}`;
+function facteurs(conteneur, f) {
+  if (!f) return;
+  const lignes = [["métier", f.metier, 3], ["niveau", f.niveau, 2], ["compétences", f.competences, 3], ["contrat", f.contrat, 1]];
+  for (const [nom, valeur, max] of lignes) {
+    const ligne = document.createElement("div");
+    ligne.className = "facteur";
+    const libelle = document.createElement("span");
+    libelle.textContent = nom;
+    const barre = document.createElement("span");
+    barre.className = "barre";
+    barre.setAttribute("role", "img");
+    barre.setAttribute("aria-label", `${valeur} sur ${max}`);
+    for (let i = 0; i < max; i++) {
+      const case_ = document.createElement("i");
+      if (i < valeur) case_.className = "plein";
+      barre.append(case_);
+    }
+    ligne.append(libelle, barre);
+    conteneur.append(ligne);
+  }
 }
 
 function noeud(c) {
   if (c.noeud) return c.noeud;
   const n = modele.content.firstElementChild.cloneNode(true);
   const champ = (sel, texte) => { n.querySelector(sel).textContent = texte || ""; };   // jamais innerHTML
-  const note = n.querySelector(".note");
-  note.textContent = c.score;
-  note.classList.add(c.score >= 8 ? "n-haute" : c.score >= 6 ? "n-moyenne" : c.score >= 4 ? "n-basse" : "n-faible");
+  const sceau = n.querySelector(".sceau");
+  sceau.classList.add(c.score >= 8 ? "n-haute" : c.score >= 6 ? "n-moyenne" : c.score >= 4 ? "n-basse" : "n-faible");
+  sceau.setAttribute("aria-label", `Note : ${c.score} sur 10`);
+  champ(".sceau b", KANJI[c.score] ?? String(c.score));
+  champ(".sceau span", `${c.score}/10`);
   champ(".titre", c.title);
   champ(".societe", c.company || "Entreprise non précisée");
-  champ(".lieu", c.location && `📍 ${c.location}`);
+  champ(".lieu", c.location);
   champ(".contrat", c.contract);
   champ(".salaire", c.salary);
   champ(".date", depuis(c.published_at));
   champ(".doublons", c.nb > 1 && `publiée ${c.nb} fois`);
-  champ(".profil", PROFIL === null && `Profil ${c.profil}`);
-  champ(".explication", c.explanation);
-  champ(".facteurs", facteurs(c.factors));
+  champ(".profil", PROFIL === null && c.profil);
+  champ(".parole", c.explanation);
+  facteurs(n.querySelector(".facteurs"), c.factors);
   champ(".description", c.description && (c.description.length >= 700 ? c.description + " …" : c.description));
   const lien = n.querySelector(".lien");
-  if (c.url) lien.href = c.url; else lien.remove();
+  if (c.url) lien.href = c.url; else lien.parentElement.remove();
   brancherGeste(n, c);
   return (c.noeud = n);
 }
@@ -248,15 +402,18 @@ function afficher() {
   if (dessus) {
     const n = noeud(dessus);
     n.classList.remove("dessous");
-    if (!n.isConnected) pile.append(n);      // en dernier = dessus
+    if (!n.isConnected) impact.before(n);    // juste sous les lignes de vitesse = dessus
   }
   vide.hidden = deck.length > 0;
   if (!deck.length) {
-    $("vide-titre").textContent = chargement ? "Chargement…" : enErreur ? "Serveur injoignable" : "Plus rien à trier 🎉";
-    $("vide-texte").textContent = chargement ? "" : enErreur
-      ? "Vérifie la connexion, puis recharge la page." : "La collecte passe chaque jour à 7 h 30.";
+    const etat = chargement ? "charge" : enErreur ? "erreur" : "fini";
+    $("vide-kanji").hidden = etat !== "fini";
+    $("vide-titre").textContent = { charge: "Chargement des offres…", erreur: "Serveur injoignable", fini: "Tout est trié." }[etat];
+    $("vide-texte").textContent = { charge: "", erreur: "Vérifie ta connexion, puis recharge la page.",
+                                    fini: "La prochaine collecte passe à 7 h 30." }[etat];
     const lien = $("vide-lien");
-    lien.hidden = Boolean(chargement) || enErreur || NOTE_MIN === 0;
+    lien.hidden = etat !== "fini" || NOTE_MIN === 0;
+    lien.textContent = `Afficher aussi les notes sous ${NOTE_MIN}`;
     lien.href = `/swipe?${requete({ note_min: 0 })}`;
   }
   bLike.disabled = bNope.disabled = deck.length === 0;
@@ -267,6 +424,12 @@ function afficher() {
 function brancherGeste(n, c) {
   let id = null, x0 = 0, y0 = 0, dx = 0, t0 = 0, actif = false;
   const tampons = { like: n.querySelector(".tampon.like"), nope: n.querySelector(".tampon.nope") };
+  const repos = () => {
+    n.style.transform = "";
+    n.style.setProperty("--force", 0);
+    delete n.dataset.sens;
+    tampons.like.style.opacity = tampons.nope.style.opacity = 0;
+  };
 
   n.addEventListener("pointerdown", e => {
     if (deck[0] !== c || e.button > 0) return;
@@ -283,8 +446,10 @@ function brancherGeste(n, c) {
       n.setPointerCapture(id);
       n.classList.add("glisse");
     }
-    n.style.transform = `translateX(${dx}px) rotate(${dx / 18}deg)`;
     const force = Math.min(1, Math.abs(dx) / (n.offsetWidth * SEUIL));
+    n.style.transform = `translateX(${dx}px) rotate(${dx / 18}deg)`;
+    n.style.setProperty("--force", force.toFixed(2));
+    n.dataset.sens = dx > 0 ? "droite" : "gauche";
     tampons.like.style.opacity = dx > 0 ? force : 0;
     tampons.nope.style.opacity = dx < 0 ? force : 0;
   });
@@ -298,7 +463,7 @@ function brancherGeste(n, c) {
     const valide = e.type === "pointerup" &&
       (Math.abs(dx) > n.offsetWidth * SEUIL || (vitesse > 0.5 && Math.abs(dx) > 50));
     if (valide) decider(dx > 0 ? "like" : "nope");
-    else { n.style.transform = ""; tampons.like.style.opacity = tampons.nope.style.opacity = 0; }
+    else repos();
     // le relâchement d'un glissement ne doit pas compter comme un clic (sur le lien, par exemple)
     const bloque = ev => { ev.preventDefault(); ev.stopPropagation(); };
     n.addEventListener("click", bloque, true);
@@ -310,6 +475,14 @@ function brancherGeste(n, c) {
 
 /* ---------- Décider, annuler ---------- */
 
+function frapper(decision) {         // les lignes de vitesse, rejouées à chaque décision
+  if (REDUIT) return;
+  impact.dataset.sens = decision;
+  impact.classList.remove("actif");
+  void impact.offsetWidth;           // oblige le navigateur à repartir de zéro
+  impact.classList.add("actif");
+}
+
 function decider(decision) {
   const c = deck.shift();
   if (!c) return;
@@ -317,10 +490,15 @@ function decider(decision) {
   const n = noeud(c);
   c.noeud = null;                          // en cas d'annulation, la carte sera reconstruite à neuf
   n.classList.remove("glisse");
-  n.classList.add("sortie");
-  n.querySelector(`.tampon.${decision}`).style.opacity = 1;
-  n.style.transform = `translateX(${sens * 140}%) rotate(${sens * 20}deg)`;
-  setTimeout(() => n.remove(), 350);
+  n.classList.add("sortie");               // elle quitte la pile : elle n'écoute plus les gestes
+  n.dataset.sens = sens > 0 ? "droite" : "gauche";
+  n.querySelector(`.tampon.${decision}`).classList.add("frappe");   // le tampon s'abat…
+  frapper(decision);
+  setTimeout(() => {                       // … puis la carte s'envole
+    n.classList.add("envol");
+    n.style.transform = `translateX(${sens * 140}%) rotate(${sens * 20}deg)`;
+  }, REDUIT ? 0 : 170);
+  setTimeout(() => n.remove(), REDUIT ? 50 : 560);
   historique.push({ carte: c, decision });
   afficher();
   if (deck.length < 5) charger();
