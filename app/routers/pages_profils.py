@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from app.db import session
 from app.llm import queue
 from app.services.collect import recalculer_exclusions
+from app.services.scoring import enqueue_scoring
 from app.web import templates
 
 router = APIRouter(include_in_schema=False)  # pages HTML : absentes de /docs
@@ -88,11 +89,15 @@ def liste(request: Request):
 
 
 @router.get("/profils/{profile_id}", response_class=HTMLResponse)
-def detail(request: Request, profile_id: int, ok: str | None = None):
+def detail(request: Request, profile_id: int, ok: str | None = None, renote: int = 0):
     with session() as conn:
         p = _lire(conn, profile_id)
         en_cours = _analyse_en_cours(conn, profile_id)
-    return _page(request, p, message=MESSAGES.get(ok), en_cours=en_cours)
+    message = MESSAGES.get(ok)
+    if message and renote:
+        message += (f" {renote} offre(s) en cours de renotation "
+                    f"(environ {max(1, round(renote * 5.6 / 60))} min, en arrière-plan).")
+    return _page(request, p, message=message, en_cours=en_cours)
 
 
 @router.post("/profils/{profile_id}")
@@ -114,6 +119,7 @@ def enregistrer(
 ):
     with session() as conn:
         p = _lire(conn, profile_id)
+    avant = {k: p[k] for k in ("jobs", "contracts", "cv_summary")}  # ce qui influence la note
     # On garde les valeurs saisies : en cas d'erreur, le formulaire est réaffiché tel quel
     p.update(
         name=name.strip(), first_name=first_name.strip(), city=city.strip(), radius_km=radius_km,
@@ -153,8 +159,16 @@ def enregistrer(
     except sqlite3.IntegrityError:
         return _page(request, p, erreur=f"Un autre profil s'appelle déjà « {p['name']} ».")
     recalculer_exclusions(profile_id)  # les nouveaux mots exclus s'appliquent aussi aux offres déjà collectées
+    renotation = 0
+    if statut == "active" and any(p[k] != v for k, v in avant.items()):
+        # La note dépend des métiers visés, des contrats et du CV condensé : s'ils changent,
+        # les notes existantes sont périmées (sauf celles des offres déjà swipées).
+        with session() as conn:
+            conn.execute("UPDATE matches SET score = NULL, explanation = NULL "
+                         "WHERE profile_id = ? AND decision IS NULL", (profile_id,))
+        renotation = enqueue_scoring(profile_id)
     ok = {"activer": "active", "pause": "pause"}.get(action, "enregistre")
-    return RedirectResponse(f"/profils/{profile_id}?ok={ok}", status_code=303)
+    return RedirectResponse(f"/profils/{profile_id}?ok={ok}&renote={renotation}", status_code=303)
 
 
 @router.post("/profils/{profile_id}/analyse")
