@@ -1,4 +1,5 @@
 """Outils communs aux pages web : moteur de templates et filtres d'affichage."""
+import json
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -28,3 +29,4 @@ def safe_url(url: str | None) -> str:
 
 templates.env.filters["paris"] = paris
 templates.env.filters["safe_url"] = safe_url
+templates.env.filters["fromjson"] = lambda t: json.loads(t) if t else {}

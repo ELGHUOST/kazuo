@@ -90,6 +90,10 @@ MIGRATIONS = [
     """
     ALTER TABLE profiles ADD COLUMN adzuna_category TEXT;
     """,
+    # v5 : critères de notation (JSON), pour recalculer les notes sans rappeler l'IA
+    """
+    ALTER TABLE matches ADD COLUMN factors TEXT;
+    """,
 ]
 
 

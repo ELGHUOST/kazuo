@@ -14,6 +14,7 @@
   <div class="ligne">{{ o.company or "Entreprise non précisée" }} · {{ o.location or "Lieu non précisé" }}</div>
   <div class="ligne">{{ o.contract or "Contrat non précisé" }} · {{ o.salary or "Salaire non précisé" }} · publiée le {{ o.published_at|paris }}</div>
   {% if o.explication %}<div class="ligne"><i>{{ o.explication }}</i></div>{% endif %}
+  {% if o.facteurs %}{% set f = o.facteurs|fromjson %}<div class="ligne">métier {{ f.metier }}/3 · niveau {{ f.niveau }}/2 · compétences {{ f.competences }}/3 · contrat {{ "compatible" if f.contrat else "incompatible" }}</div>{% endif %}
   {% if o.description %}
   <div class="desc">{{ o.description[:300] }}{% if o.description|length > 300 %}…{% endif %}</div>
   {% endif %}

@@ -132,34 +132,39 @@ def profile_from_cv(payload: dict) -> dict:
 # ---------------------------------------------------------------------------
 # Notation d'une offre pour un profil
 # ---------------------------------------------------------------------------
-class Notation(BaseModel):
-    note: int = Field(ge=0, le=10, description="adéquation de l'offre au candidat, de 0 à 10")
-    explication: str = Field(description="une phrase courte qui cite le point décisif")
+class Evaluation(BaseModel):
+    """Critères élémentaires : l'IA juge chaque critère, le code calcule la note (scoring.note_finale)."""
+    metier: Literal[0, 1, 2, 3] = Field(description=(
+        "0 = hors informatique ou sans rapport ; 1 = informatique mais autre métier (développement, data, "
+        "gestion de projet, commercial, formation) ; 2 = métier voisin des métiers visés ; "
+        "3 = l'un des métiers visés"))
+    niveau: Literal[0, 1, 2] = Field(description=(
+        "0 = inaccessible : poste senior ou expert, plusieurs années d'expérience exigées, ou formation "
+        "d'un niveau inférieur au diplôme du candidat ; 1 = un peu au-dessus du candidat, ou incertain ; "
+        "2 = accessible à un débutant ayant le diplôme du candidat"))
+    competences: Literal[0, 1, 2, 3] = Field(description=(
+        "part des compétences demandées présentes dans le CV : 0 = aucune, 1 = peu, 2 = la plupart, "
+        "3 = presque toutes"))
+    contrat: Literal[0, 1] = Field(description="0 = contrat incompatible avec ceux acceptés ; 1 = compatible ou non précisé")
+    explication: str = Field(description="une phrase qui cite le critère décisif")
 
 
 SYSTEME_NOTATION = (
-    "Tu évalues l'adéquation entre une offre d'emploi et un candidat, pour l'aider à trier ses offres. "
-    "Étape 1, niveau du candidat : déduis-le de son CV (diplôme le plus élevé, durée réelle d'expérience "
-    "professionnelle). Un stage n'est pas une expérience professionnelle. "
-    "Étape 2, niveau attendu par l'offre : années d'expérience demandées ; mots comme senior, confirmé, "
-    "expert, lead, architecte, manager, responsable ; un salaire supérieur à 45 000 €/an signale en général "
-    "un profil expérimenté ; en France, un intitulé « ingénieur » demande en général un Bac+5, sauf en "
-    "alternance préparant ce Bac+5. Si la description est tronquée, utilise l'intitulé et le salaire comme indices. "
-    "Barème : "
-    "9-10 = métier visé ET niveau accessible au candidat ET contrat accepté ; "
-    "7-8 = bonne correspondance avec un écart mineur ; "
-    "5-6 = bon domaine mais niveau attendu un peu supérieur, ou spécialité voisine ; "
-    "3-4 = même secteur mais autre métier, ou niveau attendu nettement supérieur ; "
-    "0-2 = hors sujet, ou poste clairement senior ou expert, ou formation d'un niveau inférieur à celui du candidat. "
-    "Règles : une forte correspondance de compétences ne compense PAS un niveau attendu trop élevé ; "
-    "n'attribue au candidat que ce que dit son CV ; l'explication tient en une phrase et cite le point "
-    "décisif (compétence ou niveau). "
-    "Réponds uniquement avec le JSON demandé."
+    "Tu évalues une offre d'emploi pour un candidat, critère par critère. Pour chaque critère, choisis la "
+    "valeur dont la définition correspond le mieux ; ne produis pas de note globale. "
+    "Indices de niveau : années d'expérience demandées ; mots senior, confirmé, expert, lead, architecte, "
+    "manager, responsable ; un salaire supérieur à 45 000 €/an signale en général un profil expérimenté ; "
+    "en France, un intitulé « ingénieur » demande en général un Bac+5, sauf en alternance préparant ce "
+    "diplôme. Si la description est tronquée, utilise l'intitulé et le salaire comme indices. "
+    "Règles : n'invente rien sur l'offre ni sur le candidat ; un stage n'est pas une expérience "
+    "professionnelle ; l'explication tient en une phrase. Réponds uniquement avec le JSON demandé."
 )
 
 
 @handler("score_offer")
 def score_offer(payload: dict) -> dict:
+    from app.services.scoring import note_finale  # import local : évite un import circulaire au démarrage
+
     oid, pid = payload["offer_id"], payload["profile_id"]
     with session() as conn:  # lecture, puis connexion refermée AVANT l'appel à l'IA
         o = conn.execute("SELECT title, company, location, contract, salary, description "
@@ -168,19 +173,21 @@ def score_offer(payload: dict) -> dict:
                          "FROM profiles WHERE id = ?", (pid,)).fetchone()
     if o is None or p is None:
         raise ValueError(f"offre {oid} ou profil {pid} introuvable")
-    # Même intitulé et même entreprise déjà notés pour ce profil (ex. une annonce publiée
-    # dans plusieurs villes) : on recopie la note au lieu de rappeler l'IA.
+
+    # Même intitulé et même entreprise déjà évalués pour ce profil : on recopie, sans rappeler l'IA.
     with session() as conn:
         deja = conn.execute(
-            """SELECT m.score, m.explanation, m.offer_id FROM matches AS m
+            """SELECT m.score, m.explanation, m.factors, m.offer_id FROM matches AS m
                JOIN offers AS x ON x.id = m.offer_id
-               WHERE m.profile_id = ? AND m.score IS NOT NULL AND m.offer_id != ?
+               WHERE m.profile_id = ? AND m.factors IS NOT NULL AND m.offer_id != ?
                  AND lower(x.title) = lower(?) AND lower(coalesce(x.company, '')) = lower(coalesce(?, ''))
                LIMIT 1""", (pid, oid, o["title"], o["company"])).fetchone()
         if deja is not None:
-            conn.execute("UPDATE matches SET score = ?, explanation = ? WHERE offer_id = ? AND profile_id = ?",
-                         (deja["score"], deja["explanation"], oid, pid))
-            return {"copie_de": deja["offer_id"], "notation": {"note": deja["score"]}}
+            conn.execute("UPDATE matches SET score = ?, explanation = ?, factors = ? "
+                         "WHERE offer_id = ? AND profile_id = ?",
+                         (deja["score"], deja["explanation"], deja["factors"], oid, pid))
+            return {"copie_de": deja["offer_id"], "note": deja["score"]}
+
     user = (
         f"CANDIDAT (profil « {p['name']} »)\n"
         f"Métiers visés : {', '.join(json.loads(p['jobs'])) or 'non précisés'}\n"
@@ -192,8 +199,11 @@ def score_offer(payload: dict) -> dict:
         f"Salaire : {o['salary'] or 'non précisé'}\n"
         f"Description : {(o['description'] or '')[:2000]}"
     )
-    notation, stats = chat_json(SYSTEME_NOTATION, user, Notation, max_tokens=400)
+    e, stats = chat_json(SYSTEME_NOTATION, user, Evaluation, max_tokens=400)
+    facteurs = e.model_dump(exclude={"explication"})
+    note = note_finale(facteurs)
     with session() as conn:
-        conn.execute("UPDATE matches SET score = ?, explanation = ? WHERE offer_id = ? AND profile_id = ?",
-                     (notation.note, notation.explication, oid, pid))
-    return {"notation": notation.model_dump(), "stats": stats}
+        conn.execute("UPDATE matches SET score = ?, explanation = ?, factors = ? "
+                     "WHERE offer_id = ? AND profile_id = ?",
+                     (note, e.explication, json.dumps(facteurs), oid, pid))
+    return {"note": note, "facteurs": facteurs, "explication": e.explication, "stats": stats}

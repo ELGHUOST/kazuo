@@ -2,7 +2,45 @@
 import argparse
 
 from app.db import session
+import json
+
 from app.llm import queue
+
+# Poids de chaque critère dans la note, et valeur maximale de chaque critère
+POIDS = {"metier": 0.45, "niveau": 0.25, "competences": 0.20, "contrat": 0.10}
+MAXI = {"metier": 3, "niveau": 2, "competences": 3, "contrat": 1}
+
+
+def note_finale(f: dict) -> int:
+    """Note sur 10, calculée par le CODE à partir des critères évalués par l'IA.
+
+    Les plafonds sont des règles éliminatoires : un métier sans rapport ou un niveau
+    inaccessible ne peut pas être compensé par de bonnes compétences.
+    """
+    base = 10 * sum(POIDS[k] * f[k] / MAXI[k] for k in POIDS)
+    plafond = {0: 1, 1: 4, 2: 10, 3: 10}[f["metier"]]
+    plafond = min(plafond, {0: 3, 1: 6, 2: 10}[f["niveau"]])
+    if f["contrat"] == 0:
+        plafond = min(plafond, 3)
+    return int(min(base, plafond) + 0.5)
+
+
+def recalculer_notes(profile_id: int | None = None) -> int:
+    """Recalcule toutes les notes à partir des critères stockés, SANS l'IA (après un changement de poids)."""
+    sql = "SELECT offer_id, profile_id, score, factors FROM matches WHERE factors IS NOT NULL"
+    args: tuple = ()
+    if profile_id is not None:
+        sql += " AND profile_id = ?"
+        args = (profile_id,)
+    changements = 0
+    with session() as conn:
+        for r in conn.execute(sql, args).fetchall():
+            note = note_finale(json.loads(r["factors"]))
+            if note != r["score"]:
+                conn.execute("UPDATE matches SET score = ? WHERE offer_id = ? AND profile_id = ?",
+                             (note, r["offer_id"], r["profile_id"]))
+                changements += 1
+    return changements
 
 
 def enqueue_scoring(profile_id: int | None = None, limite: int | None = None) -> int:
@@ -38,7 +76,11 @@ def main() -> None:
     a = argparse.ArgumentParser(description="Met en file la notation des offres non notées")
     a.add_argument("--profil", type=int, help="un seul profil (id)")
     a.add_argument("--limite", type=int, help="au plus N offres (pour tester)")
+    a.add_argument("--recalculer", action="store_true", help="recalcule les notes depuis les critères, sans l'IA")
     args = a.parse_args()
+    if args.recalculer:
+        print(f"{recalculer_notes(args.profil)} note(s) modifiée(s)")
+        return
     print(f"{enqueue_scoring(args.profil, args.limite)} notation(s) mise(s) en file")
 
 
