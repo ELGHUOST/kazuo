@@ -97,11 +97,45 @@ def run(jours: int | None = 1, profile_id: int | None = None) -> list[dict]:
     return bilan
 
 
+def recalculer_exclusions(profile_id: int) -> tuple[int, int]:
+    """Réapplique les mots exclus ACTUELS du profil à toutes ses offres déjà rattachées.
+
+    excluded_by est une donnée dérivée (titre × mots exclus) : quand les mots exclus
+    changent, il faut la recalculer. Renvoie (offres exclues au total, changements).
+    """
+    with session() as conn:
+        p = conn.execute("SELECT excluded FROM profiles WHERE id = ?", (profile_id,)).fetchone()
+        if p is None:
+            return 0, 0
+        exclus = json.loads(p["excluded"])
+        changements = 0
+        for r in conn.execute(
+            """SELECT m.offer_id, m.excluded_by, o.title FROM matches AS m
+               JOIN offers AS o ON o.id = m.offer_id WHERE m.profile_id = ?""", (profile_id,)
+        ).fetchall():
+            nouveau = mot_exclu(r["title"], exclus)
+            if nouveau != r["excluded_by"]:
+                conn.execute("UPDATE matches SET excluded_by = ? WHERE offer_id = ? AND profile_id = ?",
+                             (nouveau, r["offer_id"], profile_id))
+                changements += 1
+        total = conn.execute("SELECT COUNT(*) FROM matches WHERE profile_id = ? AND excluded_by IS NOT NULL",
+                             (profile_id,)).fetchone()[0]
+    return total, changements
+
+
 def main() -> None:
     a = argparse.ArgumentParser(description="Collecte des offres pour les profils actifs")
     a.add_argument("--jours", type=int, default=1, help="offres des N derniers jours (défaut : 1)")
     a.add_argument("--profil", type=int, help="un seul profil (id)")
+    a.add_argument("--recalculer-exclusions", action="store_true",
+                   help="réapplique les mots exclus aux offres déjà rattachées, sans appeler Adzuna")
     args = a.parse_args()
+    if args.recalculer_exclusions:
+        ids = [args.profil] if args.profil else [p["id"] for p in profils_actifs()]
+        for pid in ids:
+            total, changements = recalculer_exclusions(pid)
+            print(f"Profil {pid} : {changements} changement(s), {total} offre(s) exclue(s) au total")
+        return
     bilan = run(args.jours, args.profil)
     if not bilan:
         print("Aucun profil actif : rien à collecter.")

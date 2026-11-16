@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.db import session
 from app.llm import queue
+from app.services.collect import recalculer_exclusions
 from app.web import templates
 
 router = APIRouter(include_in_schema=False)  # pages HTML : absentes de /docs
@@ -151,6 +152,7 @@ def enregistrer(
             )
     except sqlite3.IntegrityError:
         return _page(request, p, erreur=f"Un autre profil s'appelle déjà « {p['name']} ».")
+    recalculer_exclusions(profile_id)  # les nouveaux mots exclus s'appliquent aussi aux offres déjà collectées
     ok = {"activer": "active", "pause": "pause"}.get(action, "enregistre")
     return RedirectResponse(f"/profils/{profile_id}?ok={ok}", status_code=303)
 
