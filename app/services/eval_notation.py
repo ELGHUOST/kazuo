@@ -24,6 +24,7 @@ REFERENCE = [
     ("Consultant informatique%", 0, 4),
     ("Product Owner technique%", 0, 4),
     ("Formation Technicien Syst%", 0, 3),
+    ("Alternance Technicien Informatique%", 0, 3),
     ("Conseiller clientèle%", 0, 2),
     ("TECHNICIEN ADMINISTRATIF%", 0, 2),
 ]
