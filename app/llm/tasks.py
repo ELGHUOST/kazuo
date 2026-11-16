@@ -139,15 +139,21 @@ class Notation(BaseModel):
 
 SYSTEME_NOTATION = (
     "Tu évalues l'adéquation entre une offre d'emploi et un candidat, pour l'aider à trier ses offres. "
+    "Étape 1, niveau du candidat : déduis-le de son CV (diplôme le plus élevé, durée réelle d'expérience "
+    "professionnelle). Un stage n'est pas une expérience professionnelle. "
+    "Étape 2, niveau attendu par l'offre : années d'expérience demandées ; mots comme senior, confirmé, "
+    "expert, lead, architecte, manager, responsable ; un salaire supérieur à 45 000 €/an signale en général "
+    "un profil expérimenté ; en France, un intitulé « ingénieur » demande en général un Bac+5, sauf en "
+    "alternance préparant ce Bac+5. Si la description est tronquée, utilise l'intitulé et le salaire comme indices. "
     "Barème : "
-    "9-10 = métier visé, niveau accessible au candidat, compétences de son CV directement utiles, contrat accepté ; "
+    "9-10 = métier visé ET niveau accessible au candidat ET contrat accepté ; "
     "7-8 = bonne correspondance avec un écart mineur ; "
-    "5-6 = domaine proche mais écart notable (expérience demandée supérieure, autre spécialité) ; "
-    "3-4 = même secteur mais autre métier (ex. développement logiciel pour un profil systèmes et réseaux) ; "
-    "0-2 = hors sujet, ou niveau ou contrat incompatible (ex. poste senior exigeant plusieurs années "
-    "d'expérience, formation d'un niveau inférieur à celui du candidat). "
-    "Règles : n'invente rien sur l'offre ni sur le candidat ; si la description est trop courte pour juger, "
-    "note prudemment et dis-le ; l'explication tient en une phrase et cite le point décisif. "
+    "5-6 = bon domaine mais niveau attendu un peu supérieur, ou spécialité voisine ; "
+    "3-4 = même secteur mais autre métier, ou niveau attendu nettement supérieur ; "
+    "0-2 = hors sujet, ou poste clairement senior ou expert, ou formation d'un niveau inférieur à celui du candidat. "
+    "Règles : une forte correspondance de compétences ne compense PAS un niveau attendu trop élevé ; "
+    "n'attribue au candidat que ce que dit son CV ; l'explication tient en une phrase et cite le point "
+    "décisif (compétence ou niveau). "
     "Réponds uniquement avec le JSON demandé."
 )
 
