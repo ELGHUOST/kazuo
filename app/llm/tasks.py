@@ -127,3 +127,54 @@ def profile_from_cv(payload: dict) -> dict:
              datetime.now(timezone.utc).isoformat(timespec="seconds"), payload["profile_id"]),
         )
     return {"fiche": fiche.model_dump(), "stats": stats}
+
+
+# ---------------------------------------------------------------------------
+# Notation d'une offre pour un profil
+# ---------------------------------------------------------------------------
+class Notation(BaseModel):
+    note: int = Field(ge=0, le=10, description="adéquation de l'offre au candidat, de 0 à 10")
+    explication: str = Field(description="une phrase courte qui cite le point décisif")
+
+
+SYSTEME_NOTATION = (
+    "Tu évalues l'adéquation entre une offre d'emploi et un candidat, pour l'aider à trier ses offres. "
+    "Barème : "
+    "9-10 = métier visé, niveau accessible au candidat, compétences de son CV directement utiles, contrat accepté ; "
+    "7-8 = bonne correspondance avec un écart mineur ; "
+    "5-6 = domaine proche mais écart notable (expérience demandée supérieure, autre spécialité) ; "
+    "3-4 = même secteur mais autre métier (ex. développement logiciel pour un profil systèmes et réseaux) ; "
+    "0-2 = hors sujet, ou niveau ou contrat incompatible (ex. poste senior exigeant plusieurs années "
+    "d'expérience, formation d'un niveau inférieur à celui du candidat). "
+    "Règles : n'invente rien sur l'offre ni sur le candidat ; si la description est trop courte pour juger, "
+    "note prudemment et dis-le ; l'explication tient en une phrase et cite le point décisif. "
+    "Réponds uniquement avec le JSON demandé."
+)
+
+
+@handler("score_offer")
+def score_offer(payload: dict) -> dict:
+    oid, pid = payload["offer_id"], payload["profile_id"]
+    with session() as conn:  # lecture, puis connexion refermée AVANT l'appel à l'IA
+        o = conn.execute("SELECT title, company, location, contract, salary, description "
+                         "FROM offers WHERE id = ?", (oid,)).fetchone()
+        p = conn.execute("SELECT name, jobs, contracts, city, radius_km, cv_summary "
+                         "FROM profiles WHERE id = ?", (pid,)).fetchone()
+    if o is None or p is None:
+        raise ValueError(f"offre {oid} ou profil {pid} introuvable")
+    user = (
+        f"CANDIDAT (profil « {p['name']} »)\n"
+        f"Métiers visés : {', '.join(json.loads(p['jobs'])) or 'non précisés'}\n"
+        f"Contrats acceptés : {', '.join(json.loads(p['contracts']))}\n"
+        f"Zone : {p['city']} ({p['radius_km']} km)\n"
+        f"CV :\n{p['cv_summary'] or 'non renseigné'}\n\n"
+        f"OFFRE\nTitre : {o['title']}\nEntreprise : {o['company'] or 'non précisée'}\n"
+        f"Lieu : {o['location'] or 'non précisé'}\nContrat : {o['contract'] or 'non précisé'}\n"
+        f"Salaire : {o['salary'] or 'non précisé'}\n"
+        f"Description : {(o['description'] or '')[:2000]}"
+    )
+    notation, stats = chat_json(SYSTEME_NOTATION, user, Notation, max_tokens=400)
+    with session() as conn:
+        conn.execute("UPDATE matches SET score = ?, explanation = ? WHERE offer_id = ? AND profile_id = ?",
+                     (notation.note, notation.explication, oid, pid))
+    return {"notation": notation.model_dump(), "stats": stats}
