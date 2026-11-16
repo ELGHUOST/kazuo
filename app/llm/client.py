@@ -1,5 +1,6 @@
 """Client Ollama : un prompt en entrée, une réponse JSON validée par Pydantic en sortie."""
 import argparse
+import json
 import time
 from typing import Literal, TypeVar
 
@@ -37,7 +38,10 @@ def chat_json(system: str, user: str, schema: type[T], *, think: str = "low",
     body = {
         "model": settings.ollama_model,
         "messages": [
-            {"role": "system", "content": system},
+            # Ollama se sert du schéma pour contraindre la sortie, mais ne le montre pas au modèle :
+            # on le répète dans le prompt, sinon les définitions des champs restent invisibles.
+            {"role": "system", "content": f"{system}\n\nSchéma JSON de la réponse attendue :\n"
+                                          f"{json.dumps(schema.model_json_schema(), ensure_ascii=False)}"},
             {"role": "user", "content": user},
         ],
         "think": think,

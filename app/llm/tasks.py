@@ -132,40 +132,46 @@ def profile_from_cv(payload: dict) -> dict:
 # ---------------------------------------------------------------------------
 # Notation d'une offre pour un profil
 # ---------------------------------------------------------------------------
+# Les valeurs sont des mots qui se décrivent eux-mêmes ; le code les traduit en nombres.
+METIER = {"metier_vise": 3, "metier_voisin": 2, "autre_metier_informatique": 1, "sans_rapport": 0}
+NIVEAU = {"accessible": 2, "un_peu_au_dessus": 1, "inaccessible": 0}
+COMPETENCES = {"presque_toutes": 3, "la_plupart": 2, "peu": 1, "aucune": 0}
+CONTRAT = {"compatible": 1, "incompatible": 0}
+
+
 class Evaluation(BaseModel):
-    """Critères élémentaires : l'IA juge chaque critère, le code calcule la note (scoring.note_finale)."""
-    metier: Literal[0, 1, 2, 3] = Field(description=(
-        "0 = hors informatique ou sans rapport ; 1 = informatique mais autre métier (développement, data, "
-        "gestion de projet, commercial, formation) ; 2 = métier voisin des métiers visés ; "
-        "3 = l'un des métiers visés"))
-    niveau: Literal[0, 1, 2] = Field(description=(
-        "0 = inaccessible : poste senior ou expert, plusieurs années d'expérience exigées, ou formation "
-        "d'un niveau inférieur au diplôme du candidat ; 1 = un peu au-dessus du candidat, ou incertain ; "
-        "2 = accessible à un débutant ayant le diplôme du candidat"))
-    competences: Literal[0, 1, 2, 3] = Field(description=(
-        "part des compétences demandées présentes dans le CV : 0 = aucune, 1 = peu, 2 = la plupart, "
-        "3 = presque toutes"))
-    contrat: Literal[0, 1] = Field(description="0 = contrat incompatible avec ceux acceptés ; 1 = compatible ou non précisé")
-    explication: str = Field(description="une phrase qui cite le critère décisif")
+    metier: Literal["metier_vise", "metier_voisin", "autre_metier_informatique", "sans_rapport"]
+    niveau: Literal["accessible", "un_peu_au_dessus", "inaccessible"]
+    competences: Literal["presque_toutes", "la_plupart", "peu", "aucune"]
+    contrat: Literal["compatible", "incompatible"]
+    explication: str = Field(description="une phrase de 25 mots maximum")
 
 
 SYSTEME_NOTATION = (
-    "Tu évalues une offre d'emploi pour un candidat, critère par critère. Pour chaque critère, choisis la "
-    "valeur dont la définition correspond le mieux ; ne produis pas de note globale. "
-    "Indices de niveau : années d'expérience demandées ; mots senior, confirmé, expert, lead, architecte, "
-    "manager, responsable ; un salaire supérieur à 45 000 €/an signale en général un profil expérimenté ; "
-    "en France, un intitulé « ingénieur » demande en général un Bac+5, sauf en alternance préparant ce "
-    "diplôme. Si la description est tronquée, utilise l'intitulé et le salaire comme indices. "
-    "Règles : n'invente rien sur l'offre ni sur le candidat ; un stage n'est pas une expérience "
-    "professionnelle ; l'explication tient en une phrase. Réponds uniquement avec le JSON demandé."
+    "Tu évalues une offre d'emploi pour un candidat, critère par critère, sans produire de note globale.\n"
+    "metier :\n"
+    "- metier_vise : l'offre correspond à l'un des métiers visés par le candidat ;\n"
+    "- metier_voisin : métier proche (mêmes outils, missions qui se recoupent largement) ;\n"
+    "- autre_metier_informatique : informatique, mais un autre métier : développement, architecture "
+    "logicielle, ERP/SAP, data, gestion de projet, product owner, commercial, formation ;\n"
+    "- sans_rapport : hors informatique.\n"
+    "niveau (accessibilité pour CE candidat) :\n"
+    "- accessible : ouvert à un débutant ayant le diplôme du candidat ;\n"
+    "- un_peu_au_dessus : courte expérience souhaitée (1 à 2 ans), intitulé « ingénieur » sans autre "
+    "indice de séniorité, ou niveau incertain ;\n"
+    "- inaccessible : senior, confirmé, expert, lead, architecte, responsable ou manager ; 3 ans "
+    "d'expérience ou plus ; salaire supérieur à 45 000 €/an ; ou formation d'un niveau inférieur au "
+    "diplôme du candidat.\n"
+    "competences : part des compétences demandées présentes dans le CV.\n"
+    "contrat : compatible si le contrat fait partie des contrats acceptés ou n'est pas précisé.\n"
+    "Règles : n'invente rien ; un stage n'est pas une expérience professionnelle ; si la description est "
+    "tronquée, utilise l'intitulé et le salaire. L'explication tient en une phrase de 25 mots maximum. "
+    "Réponds uniquement avec le JSON demandé."
 )
 
 
-@handler("score_offer")
-def score_offer(payload: dict) -> dict:
-    from app.services.scoring import note_finale  # import local : évite un import circulaire au démarrage
-
-    oid, pid = payload["offer_id"], payload["profile_id"]
+def evaluer(oid: int, pid: int) -> tuple[dict, str, dict]:
+    """Interroge l'IA et renvoie (critères en nombres, explication, statistiques). N'écrit rien en base."""
     with session() as conn:  # lecture, puis connexion refermée AVANT l'appel à l'IA
         o = conn.execute("SELECT title, company, location, contract, salary, description "
                          "FROM offers WHERE id = ?", (oid,)).fetchone()
@@ -173,21 +179,7 @@ def score_offer(payload: dict) -> dict:
                          "FROM profiles WHERE id = ?", (pid,)).fetchone()
     if o is None or p is None:
         raise ValueError(f"offre {oid} ou profil {pid} introuvable")
-
-    # Même intitulé et même entreprise déjà évalués pour ce profil : on recopie, sans rappeler l'IA.
-    with session() as conn:
-        deja = conn.execute(
-            """SELECT m.score, m.explanation, m.factors, m.offer_id FROM matches AS m
-               JOIN offers AS x ON x.id = m.offer_id
-               WHERE m.profile_id = ? AND m.factors IS NOT NULL AND m.offer_id != ?
-                 AND lower(x.title) = lower(?) AND lower(coalesce(x.company, '')) = lower(coalesce(?, ''))
-               LIMIT 1""", (pid, oid, o["title"], o["company"])).fetchone()
-        if deja is not None:
-            conn.execute("UPDATE matches SET score = ?, explanation = ?, factors = ? "
-                         "WHERE offer_id = ? AND profile_id = ?",
-                         (deja["score"], deja["explanation"], deja["factors"], oid, pid))
-            return {"copie_de": deja["offer_id"], "note": deja["score"]}
-
+    # Le candidat d'abord (identique pour toutes les offres du profil : profite du cache d'Ollama)
     user = (
         f"CANDIDAT (profil « {p['name']} »)\n"
         f"Métiers visés : {', '.join(json.loads(p['jobs'])) or 'non précisés'}\n"
@@ -200,10 +192,37 @@ def score_offer(payload: dict) -> dict:
         f"Description : {(o['description'] or '')[:2000]}"
     )
     e, stats = chat_json(SYSTEME_NOTATION, user, Evaluation, max_tokens=400)
-    facteurs = e.model_dump(exclude={"explication"})
+    facteurs = {"metier": METIER[e.metier], "niveau": NIVEAU[e.niveau],
+                "competences": COMPETENCES[e.competences], "contrat": CONTRAT[e.contrat]}
+    return facteurs, e.explication, stats
+
+
+@handler("score_offer")
+def score_offer(payload: dict) -> dict:
+    from app.services.scoring import note_finale  # import local : évite un import circulaire au démarrage
+
+    oid, pid = payload["offer_id"], payload["profile_id"]
+    # Même intitulé et même entreprise déjà évalués pour ce profil : on recopie, sans rappeler l'IA.
+    with session() as conn:
+        o = conn.execute("SELECT title, company FROM offers WHERE id = ?", (oid,)).fetchone()
+        if o is None:
+            raise ValueError(f"offre {oid} introuvable")
+        deja = conn.execute(
+            """SELECT m.score, m.explanation, m.factors, m.offer_id FROM matches AS m
+               JOIN offers AS x ON x.id = m.offer_id
+               WHERE m.profile_id = ? AND m.factors IS NOT NULL AND m.offer_id != ?
+                 AND lower(x.title) = lower(?) AND lower(coalesce(x.company, '')) = lower(coalesce(?, ''))
+               LIMIT 1""", (pid, oid, o["title"], o["company"])).fetchone()
+        if deja is not None:
+            conn.execute("UPDATE matches SET score = ?, explanation = ?, factors = ? "
+                         "WHERE offer_id = ? AND profile_id = ?",
+                         (deja["score"], deja["explanation"], deja["factors"], oid, pid))
+            return {"copie_de": deja["offer_id"], "note": deja["score"]}
+
+    facteurs, explication, stats = evaluer(oid, pid)
     note = note_finale(facteurs)
     with session() as conn:
         conn.execute("UPDATE matches SET score = ?, explanation = ?, factors = ? "
                      "WHERE offer_id = ? AND profile_id = ?",
-                     (note, e.explication, json.dumps(facteurs), oid, pid))
-    return {"note": note, "facteurs": facteurs, "explication": e.explication, "stats": stats}
+                     (note, explication, json.dumps(facteurs), oid, pid))
+    return {"note": note, "facteurs": facteurs, "explication": explication, "stats": stats}
