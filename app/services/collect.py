@@ -64,7 +64,7 @@ def save(offers: list[Offer], profile: dict | None = None, query: str = "") -> d
 
 
 def profils_actifs(profile_id: int | None = None) -> list[dict]:
-    sql = "SELECT id, name, city, radius_km, keywords, excluded FROM profiles WHERE status = 'active'"
+    sql = "SELECT id, name, city, radius_km, keywords, excluded, adzuna_category FROM profiles WHERE status = 'active'"
     args: tuple = ()
     if profile_id is not None:
         sql += " AND id = ?"
@@ -87,7 +87,8 @@ def run(jours: int | None = 1, profile_id: int | None = None) -> list[dict]:
         if i:
             time.sleep(adzuna.PAUSE_S)  # on espace les recherches entre elles
         try:
-            offers = adzuna.search(q, where=p["city"], distance_km=p["radius_km"], max_days_old=jours)
+            offers = adzuna.search(q, where=p["city"], distance_km=p["radius_km"], max_days_old=jours,
+                                   category=p["adzuna_category"])
             stats = save(offers, p, q)
         except (adzuna.AdzunaError, httpx.HTTPError) as e:
             log.warning("[adzuna] %s / « %s » : %s", p["name"], q, e)

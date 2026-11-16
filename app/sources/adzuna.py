@@ -67,7 +67,7 @@ def _to_offer(r: dict) -> Offer:
 
 
 def search(what: str, where: str = "Bordeaux", distance_km: int = 30,
-           max_days_old: int | None = None) -> list[Offer]:
+           max_days_old: int | None = None, category: str | None = None) -> list[Offer]:
     """Cherche des offres, page par page, dans la limite des garde-fous."""
     if not (settings.adzuna_app_id and settings.adzuna_app_key):
         raise AdzunaError("ADZUNA_APP_ID / ADZUNA_APP_KEY absents de kazuo.env")
@@ -86,6 +86,8 @@ def search(what: str, where: str = "Bordeaux", distance_km: int = 30,
             }
             if max_days_old:
                 params["max_days_old"] = max_days_old
+            if category:
+                params["category"] = category
             r = client.get(API.format(page=page), params=params)
             # On n'affiche jamais r.url : elle contient app_key en clair.
             if r.status_code in (401, 403):

@@ -86,6 +86,10 @@ MIGRATIONS = [
     );
     CREATE INDEX idx_matches_profile ON matches (profile_id, excluded_by);
     """,
+    # v4 : catégorie Adzuna par profil (ex. it-jobs) : limite les recherches à un secteur
+    """
+    ALTER TABLE profiles ADD COLUMN adzuna_category TEXT;
+    """,
 ]
 
 

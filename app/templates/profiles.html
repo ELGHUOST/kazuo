@@ -8,7 +8,7 @@
 <article class="carte">
   <span class="badge {{ p.status }}">{{ libelles[p.status] }}</span>
   <a class="titre" href="/profils/{{ p.id }}">{{ p.name }}</a>
-  <div class="ligne">{{ p.first_name }} · {{ p.city }} ({{ p.radius_km }} km) · {{ p.contracts|join(", ") or "aucun contrat" }}</div>
+  <div class="ligne">{{ p.first_name }} · {{ p.city }} ({{ p.radius_km }} km){% if p.adzuna_category %} · {{ p.adzuna_category }}{% endif %} · {{ p.contracts|join(", ") or "aucun contrat" }}</div>
   <div class="ligne">Recherches : {{ p.keywords|join(" · ") or "aucune" }}</div>
 </article>
 {% else %}

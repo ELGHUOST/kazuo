@@ -18,6 +18,15 @@ LIBELLES = {"draft": "brouillon", "active": "actif", "paused": "en pause"}
 CONTRATS = ["CDI", "CDD", "intérim", "alternance", "stage", "freelance"]
 ROME = re.compile(r"^[A-N][0-9]{4}$")
 CHAMPS_JSON = ("jobs", "keywords", "excluded", "rome_codes", "contracts")
+CATEGORIES_ADZUNA = {
+    "": "Toutes catégories",
+    "it-jobs": "Informatique",
+    "retail-jobs": "Commerce de détail",
+    "hospitality-catering-jobs": "Hôtellerie et restauration",
+    "logistics-warehouse-jobs": "Distribution et entrepôts",
+    "customer-services-jobs": "Services client",
+    "part-time-jobs": "Temps partiel",
+}
 MESSAGES = {
     "enregistre": "Profil enregistré.",
     "active": "Profil activé : il sera utilisé par la prochaine collecte.",
@@ -63,7 +72,7 @@ def _lignes(texte: str) -> list[str]:
 def _page(request: Request, p: dict, *, erreur=None, message=None, en_cours=False):
     return templates.TemplateResponse(
         request, "profile_edit.html",
-        {"p": p, "libelles": LIBELLES, "contrats_possibles": CONTRATS,
+        {"p": p, "libelles": LIBELLES, "contrats_possibles": CONTRATS, "categories": CATEGORIES_ADZUNA,
          "analyse_en_cours": en_cours, "erreur": erreur, "message": message},
         status_code=400 if erreur else 200,
     )
@@ -100,6 +109,7 @@ def enregistrer(
     rome_codes: Annotated[str, Form()] = "",
     contracts: Annotated[list[str] | None, Form()] = None,
     cv_summary: Annotated[str, Form()] = "",
+    adzuna_category: Annotated[str, Form()] = "",
 ):
     with session() as conn:
         p = _lire(conn, profile_id)
@@ -109,7 +119,7 @@ def enregistrer(
         keywords=_lignes(keywords), excluded=_lignes(excluded), jobs=_lignes(jobs),
         rome_codes=[c.upper() for c in _lignes(rome_codes)],
         contracts=[c for c in CONTRATS if c in (contracts or [])],
-        cv_summary=cv_summary.strip(),
+        cv_summary=cv_summary.strip(), adzuna_category=adzuna_category.strip() or None,
     )
 
     # Validation côté serveur : le navigateur se contourne, le serveur non
@@ -120,6 +130,8 @@ def enregistrer(
     mauvais = [c for c in p["rome_codes"] if not ROME.match(c)]
     if mauvais:
         return _page(request, p, erreur=f"Codes ROME invalides : {', '.join(mauvais)} (format A1234).")
+    if (p["adzuna_category"] or "") not in CATEGORIES_ADZUNA:
+        return _page(request, p, erreur="Catégorie Adzuna inconnue.")
     statut = {"activer": "active", "pause": "paused"}.get(action, p["status"])
     if statut == "active" and not (p["keywords"] and p["contracts"] and p["cv_summary"]):
         return _page(request, p, erreur="Pour activer un profil, il faut au moins une recherche, "
@@ -131,11 +143,11 @@ def enregistrer(
             conn.execute(
                 """UPDATE profiles SET name = ?, first_name = ?, city = ?, radius_km = ?,
                        keywords = ?, excluded = ?, jobs = ?, rome_codes = ?, contracts = ?,
-                       cv_summary = ?, status = ?, updated_at = ?
+                       cv_summary = ?, adzuna_category = ?, status = ?, updated_at = ?
                    WHERE id = ?""",
                 (p["name"], p["first_name"], p["city"], radius_km, dumps(p["keywords"]),
                  dumps(p["excluded"]), dumps(p["jobs"]), dumps(p["rome_codes"]),
-                 dumps(p["contracts"]), p["cv_summary"], statut, _now(), profile_id),
+                 dumps(p["contracts"]), p["cv_summary"], p["adzuna_category"], statut, _now(), profile_id),
             )
     except sqlite3.IntegrityError:
         return _page(request, p, erreur=f"Un autre profil s'appelle déjà « {p['name']} ».")
