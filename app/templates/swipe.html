@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<title>Kazuo · Swipe</title>
+{% raw %}
+<style>
+  :root { --fond: #0f172a; --texte: #0f172a; --doux: #64748b; --like: #16a34a; --nope: #dc2626; --info: #2563eb; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    display: flex; flex-direction: column; height: 100dvh; overflow: hidden; overscroll-behavior: none;
+    background: var(--fond); color: #e2e8f0; -webkit-tap-highlight-color: transparent;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .6rem .9rem .3rem; }
+  header a { color: #93c5fd; text-decoration: none; font-weight: 600; }
+  header form { display: flex; gap: .4rem; margin-left: auto; }
+  header select { font-size: 16px; padding: .25rem .4rem; border: 1px solid #334155; border-radius: 8px; background: #1e293b; color: #e2e8f0; }
+  #compteurs { width: 100%; color: #94a3b8; font-size: .85rem; }
+  #pile { position: relative; flex: 1; min-height: 0; margin: .3rem .9rem 0; }
+  #vide { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1rem; text-align: center; }
+  #vide .gros { margin: 0 0 .5rem; font-size: 1.3rem; font-weight: 700; }
+  #vide a { color: #93c5fd; }
+  .carte {
+    position: absolute; inset: 0; display: flex; flex-direction: column; overflow: hidden;
+    background: #fff; color: var(--texte); border-radius: 18px; box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    transition: transform .25s ease, opacity .25s ease; will-change: transform;
+    user-select: none; -webkit-user-select: none;
+  }
+  .carte, .carte * { touch-action: pan-y; }
+  .carte a { -webkit-user-drag: none; }
+  .carte.dessous { transform: scale(.95) translateY(10px); opacity: .6; pointer-events: none; }
+  .carte.glisse { transition: none; }
+  .carte.sortie { opacity: 0; pointer-events: none; transition: transform .3s ease-in, opacity .3s ease-in; }
+  .tampon { position: absolute; top: 1.1rem; z-index: 2; padding: .1rem .6rem; border: 4px solid; border-radius: 10px;
+            background: rgba(255,255,255,.85); font-size: 1.5rem; font-weight: 800; letter-spacing: .05em; opacity: 0; pointer-events: none; }
+  .tampon.like { left: 1rem; color: var(--like); transform: rotate(-12deg); }
+  .tampon.nope { right: 1rem; color: var(--nope); transform: rotate(12deg); }
+  .entete { padding: 1rem 1rem .7rem; border-bottom: 1px solid #e2e8f0; }
+  .ligne { display: flex; gap: .7rem; align-items: flex-start; }
+  .ligne > div { min-width: 0; }
+  .note { flex: none; display: grid; place-items: center; width: 2.7rem; height: 2.7rem; border-radius: 50%;
+          color: #fff; font-size: 1.2rem; font-weight: 800; }
+  .n-haute { background: #16a34a; } .n-moyenne { background: #0891b2; } .n-basse { background: #d97706; } .n-faible { background: #94a3b8; }
+  .titre { margin: 0; font-size: 1.1rem; line-height: 1.3; overflow-wrap: anywhere; }
+  .societe { margin-top: .15rem; color: var(--doux); }
+  .puces { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .6rem; }
+  .puce { padding: .15rem .6rem; border-radius: 999px; background: #f1f5f9; color: #334155; font-size: .8rem; }
+  .puce:empty, .explication:empty, .facteurs:empty { display: none; }
+  .corps { flex: 1; min-height: 0; overflow-y: auto; padding: .8rem 1rem; }
+  .explication { margin: 0 0 .4rem; padding: .5rem .7rem; border-left: 4px solid var(--info); border-radius: 6px; background: #eff6ff; }
+  .facteurs { margin: 0 0 .8rem; color: var(--doux); font-size: .8rem; }
+  .description { margin: 0; color: #334155; font-size: .9rem; line-height: 1.45; white-space: pre-line; }
+  .pied { padding: .7rem 1rem; border-top: 1px solid #e2e8f0; }
+  .pied a { color: var(--info); font-weight: 600; text-decoration: none; }
+  #actions { display: flex; justify-content: center; align-items: center; gap: 1.5rem; padding: .9rem 0 1rem; }
+  #actions button { width: 4rem; height: 4rem; border: 0; border-radius: 50%; background: #fff; font-size: 1.7rem;
+                    box-shadow: 0 4px 12px rgba(0,0,0,.3); cursor: pointer; touch-action: manipulation; }
+  #actions #b-annuler { width: 3rem; height: 3rem; color: #475569; font-size: 1.3rem; }
+  #b-nope { color: var(--nope); } #b-like { color: var(--like); }
+  #actions button:disabled { opacity: .35; cursor: default; }
+  #bulle { position: fixed; left: 50%; bottom: calc(6.5rem + env(safe-area-inset-bottom)); transform: translateX(-50%);
+           max-width: 90vw; padding: .5rem 1rem; border-radius: 8px; background: #1e293b; color: #fff; font-size: .9rem;
+           opacity: 0; transition: opacity .2s; pointer-events: none; }
+  #bulle.visible { opacity: 1; }
+</style>
+{% endraw %}
+</head>
+<body data-profil="{{ profil if profil is not none else '' }}" data-note-min="{{ note_min }}">
+<header>
+  <a href="/">← Offres</a>
+  <form method="get" action="/swipe">
+    <select name="profil" aria-label="Profil">
+      <option value="">Tous les profils</option>
+      {% for p in profils %}
+      <option value="{{ p.id }}"{% if p.id == profil %} selected{% endif %}>{{ p.name }}</option>
+      {% endfor %}
+    </select>
+    <select name="note_min" aria-label="Note minimale">
+      {% for n, libelle in [(7, "Notes ≥ 7"), (5, "Notes ≥ 5"), (0, "Toutes les notes")] %}
+      <option value="{{ n }}"{% if n == note_min %} selected{% endif %}>{{ libelle }}</option>
+      {% endfor %}
+    </select>
+    <noscript><button>OK</button></noscript>
+  </form>
+  <div id="compteurs">&nbsp;</div>
+</header>
+
+<main id="pile">
+  <div id="vide">
+    <p class="gros" id="vide-titre">Chargement…</p>
+    <p id="vide-texte"></p>
+    <a id="vide-lien" hidden>Voir aussi les offres moins bien notées</a>
+  </div>
+</main>
+
+<nav id="actions">
+  <button id="b-nope" type="button" aria-label="Écarter (flèche gauche)" title="Écarter (←)">✕</button>
+  <button id="b-annuler" type="button" aria-label="Annuler le dernier choix (Z)" title="Annuler (Z)">↶</button>
+  <button id="b-like" type="button" aria-label="Retenir (flèche droite)" title="Retenir (→)">♥</button>
+</nav>
+<div id="bulle" role="status"></div>
+
+<template id="modele-carte">
+  <article class="carte">
+    <div class="tampon like">RETENUE</div>
+    <div class="tampon nope">ÉCARTÉE</div>
+    <div class="entete">
+      <div class="ligne">
+        <div class="note"></div>
+        <div><h2 class="titre"></h2><div class="societe"></div></div>
+      </div>
+      <div class="puces">
+        <span class="puce lieu"></span><span class="puce contrat"></span><span class="puce salaire"></span>
+        <span class="puce date"></span><span class="puce doublons"></span><span class="puce profil"></span>
+      </div>
+    </div>
+    <div class="corps">
+      <p class="explication"></p>
+      <p class="facteurs"></p>
+      <p class="description"></p>
+    </div>
+    <div class="pied"><a class="lien" target="_blank" rel="noopener noreferrer" draggable="false">Voir l'annonce ↗</a></div>
+  </article>
+</template>
+
+{% raw %}
+<script>
+"use strict";
+const API = "/api/swipe";
+const PROFIL = document.body.dataset.profil === "" ? null : Number(document.body.dataset.profil);
+const NOTE_MIN = Number(document.body.dataset.noteMin);
+const SEUIL = 0.3;                   // part de la largeur de la carte à dépasser pour valider un swipe
+
+const $ = id => document.getElementById(id);
+const pile = $("pile"), vide = $("vide"), compteurs = $("compteurs"), modele = $("modele-carte");
+const bLike = $("b-like"), bNope = $("b-nope"), bAnnuler = $("b-annuler"), bulle = $("bulle");
+
+let deck = [];                       // cartes à venir ; deck[0] est la carte du dessus
+const historique = [];               // cartes triées pendant cette visite, pour pouvoir les remettre
+const vues = new Set();              // cartes déjà reçues ("profil:offre"), pour ne jamais empiler de doublon
+let file = Promise.resolve();        // les appels au serveur partent un par un, dans l'ordre des gestes
+let chargement = null, fini = false, enErreur = false, minuterie = null;
+
+const cle = c => `${c.profile_id}:${c.offer_id}`;
+
+/* ---------- Dialogue avec l'API ---------- */
+
+function enFile(tache) {
+  const p = file.then(tache);
+  file = p.catch(() => {});          // un échec ne bloque pas les appels suivants
+  return p;
+}
+
+async function appel(url, options = {}) {
+  const r = await fetch(url, { ...options, headers: { "Content-Type": "application/json" } });
+  if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), { status: r.status });
+  return r.json();
+}
+
+function requete(extra = {}) {
+  const q = new URLSearchParams({ note_min: NOTE_MIN, ...extra });
+  if (PROFIL !== null) q.set("profil", PROFIL);
+  return q;
+}
+
+function charger() {
+  if (chargement || fini) return;
+  const limite = Math.min(100, deck.length + 25);
+  chargement = enFile(() => appel(`${API}/cartes?${requete({ limite })}`))
+    .then(cartes => {
+      enErreur = false;
+      const nouvelles = cartes.filter(c => !vues.has(cle(c)));
+      for (const c of nouvelles) { vues.add(cle(c)); deck.push(c); }
+      if (nouvelles.length === 0) fini = true;
+    })
+    .catch(() => { enErreur = true; message("Impossible de charger les offres"); })
+    .finally(() => { chargement = null; afficher(); });
+  afficher();
+}
+
+async function majCompteurs() {
+  try {
+    const s = await appel(`${API}/stats?${requete()}`);
+    compteurs.textContent = `${s.a_trier} à trier · ♥ ${s.retenues} retenues · ✕ ${s.ecartees} écartées`;
+  } catch { /* simple indicateur : il sera remis à jour au prochain geste */ }
+}
+
+function message(texte) {
+  bulle.textContent = texte;
+  bulle.classList.add("visible");
+  clearTimeout(minuterie);
+  minuterie = setTimeout(() => bulle.classList.remove("visible"), 2500);
+}
+
+/* ---------- Affichage : seules les 2 premières cartes existent dans la page ---------- */
+
+function depuis(iso) {
+  const d = new Date(String(iso).replace(" ", "T"));
+  if (!iso || isNaN(d)) return "";
+  const jours = Math.floor((Date.now() - d) / 86400000);
+  return jours < 1 ? "aujourd'hui" : jours === 1 ? "hier" : `il y a ${jours} j`;
+}
+
+function facteurs(f) {
+  if (!f) return "";
+  return `métier ${f.metier}/3 · niveau ${f.niveau}/2 · compétences ${f.competences}/3 · contrat ${f.contrat ? "✓" : "✗"}`;
+}
+
+function noeud(c) {
+  if (c.noeud) return c.noeud;
+  const n = modele.content.firstElementChild.cloneNode(true);
+  const champ = (sel, texte) => { n.querySelector(sel).textContent = texte || ""; };   // jamais innerHTML
+  const note = n.querySelector(".note");
+  note.textContent = c.score;
+  note.classList.add(c.score >= 8 ? "n-haute" : c.score >= 6 ? "n-moyenne" : c.score >= 4 ? "n-basse" : "n-faible");
+  champ(".titre", c.title);
+  champ(".societe", c.company || "Entreprise non précisée");
+  champ(".lieu", c.location && `📍 ${c.location}`);
+  champ(".contrat", c.contract);
+  champ(".salaire", c.salary);
+  champ(".date", depuis(c.published_at));
+  champ(".doublons", c.nb > 1 && `publiée ${c.nb} fois`);
+  champ(".profil", PROFIL === null && `Profil ${c.profil}`);
+  champ(".explication", c.explanation);
+  champ(".facteurs", facteurs(c.factors));
+  champ(".description", c.description && (c.description.length >= 700 ? c.description + " …" : c.description));
+  const lien = n.querySelector(".lien");
+  if (c.url) lien.href = c.url; else lien.remove();
+  brancherGeste(n, c);
+  return (c.noeud = n);
+}
+
+function afficher() {
+  const [dessus, dessous] = deck;
+  for (const n of pile.querySelectorAll(".carte:not(.sortie)"))
+    if (n !== dessus?.noeud && n !== dessous?.noeud) n.remove();
+  if (dessous) {
+    const n = noeud(dessous);
+    n.classList.add("dessous");
+    if (!n.isConnected) pile.prepend(n);     // en premier dans le code = dessous à l'écran
+  }
+  if (dessus) {
+    const n = noeud(dessus);
+    n.classList.remove("dessous");
+    if (!n.isConnected) pile.append(n);      // en dernier = dessus
+  }
+  vide.hidden = deck.length > 0;
+  if (!deck.length) {
+    $("vide-titre").textContent = chargement ? "Chargement…" : enErreur ? "Serveur injoignable" : "Plus rien à trier 🎉";
+    $("vide-texte").textContent = chargement ? "" : enErreur
+      ? "Vérifie la connexion, puis recharge la page." : "La collecte passe chaque jour à 7 h 30.";
+    const lien = $("vide-lien");
+    lien.hidden = Boolean(chargement) || enErreur || NOTE_MIN === 0;
+    lien.href = `/swipe?${requete({ note_min: 0 })}`;
+  }
+  bLike.disabled = bNope.disabled = deck.length === 0;
+}
+
+/* ---------- Geste de glissement (souris, doigt ou stylet : les mêmes « pointer events ») ---------- */
+
+function brancherGeste(n, c) {
+  let id = null, x0 = 0, y0 = 0, dx = 0, t0 = 0, actif = false;
+  const tampons = { like: n.querySelector(".tampon.like"), nope: n.querySelector(".tampon.nope") };
+
+  n.addEventListener("pointerdown", e => {
+    if (deck[0] !== c || e.button > 0) return;
+    id = e.pointerId; x0 = e.clientX; y0 = e.clientY; dx = 0; t0 = performance.now(); actif = false;
+  });
+
+  n.addEventListener("pointermove", e => {
+    if (e.pointerId !== id) return;
+    dx = e.clientX - x0;
+    if (!actif) {
+      // on ne prend la main que si le geste est franchement horizontal (sinon c'est un défilement)
+      if (Math.abs(dx) < 10 || Math.abs(dx) < Math.abs(e.clientY - y0)) return;
+      actif = true;
+      n.setPointerCapture(id);
+      n.classList.add("glisse");
+    }
+    n.style.transform = `translateX(${dx}px) rotate(${dx / 18}deg)`;
+    const force = Math.min(1, Math.abs(dx) / (n.offsetWidth * SEUIL));
+    tampons.like.style.opacity = dx > 0 ? force : 0;
+    tampons.nope.style.opacity = dx < 0 ? force : 0;
+  });
+
+  const fin = e => {
+    if (e.pointerId !== id) return;
+    id = null;
+    if (!actif) return;
+    n.classList.remove("glisse");
+    const vitesse = Math.abs(dx) / (performance.now() - t0);     // pixels par milliseconde
+    const valide = e.type === "pointerup" &&
+      (Math.abs(dx) > n.offsetWidth * SEUIL || (vitesse > 0.5 && Math.abs(dx) > 50));
+    if (valide) decider(dx > 0 ? "like" : "nope");
+    else { n.style.transform = ""; tampons.like.style.opacity = tampons.nope.style.opacity = 0; }
+    // le relâchement d'un glissement ne doit pas compter comme un clic (sur le lien, par exemple)
+    const bloque = ev => { ev.preventDefault(); ev.stopPropagation(); };
+    n.addEventListener("click", bloque, true);
+    setTimeout(() => n.removeEventListener("click", bloque, true), 50);
+  };
+  n.addEventListener("pointerup", fin);
+  n.addEventListener("pointercancel", fin);
+}
+
+/* ---------- Décider, annuler ---------- */
+
+function decider(decision) {
+  const c = deck.shift();
+  if (!c) return;
+  const sens = decision === "like" ? 1 : -1;
+  const n = noeud(c);
+  c.noeud = null;                          // en cas d'annulation, la carte sera reconstruite à neuf
+  n.classList.remove("glisse");
+  n.classList.add("sortie");
+  n.querySelector(`.tampon.${decision}`).style.opacity = 1;
+  n.style.transform = `translateX(${sens * 140}%) rotate(${sens * 20}deg)`;
+  setTimeout(() => n.remove(), 350);
+  historique.push({ carte: c, decision });
+  afficher();
+  if (deck.length < 5) charger();
+  enFile(() => appel(API, { method: "POST",
+      body: JSON.stringify({ offer_id: c.offer_id, profile_id: c.profile_id, decision }) }))
+    .then(majCompteurs)
+    .catch(e => {
+      oublier(c);
+      if (e.status === 404) message("Offre déjà triée ailleurs : ignorée");
+      else { message("Échec réseau : l'offre revient sur la pile"); remettre(c, sens); }
+    });
+}
+
+function oublier(c) {
+  const i = historique.findIndex(h => h.carte === c);
+  if (i >= 0) historique.splice(i, 1);
+}
+
+function remettre(c, sens) {
+  deck.unshift(c);
+  afficher();
+  const n = c.noeud;
+  n.classList.add("glisse");                                   // point de départ hors de l'écran, sans animation…
+  n.style.transform = `translateX(${sens * 140}%) rotate(${sens * 20}deg)`;
+  n.getBoundingClientRect();                                   // … que le navigateur doit enregistrer…
+  n.classList.remove("glisse");
+  n.style.transform = "";                                      // … puis la carte revient au centre, animée
+}
+
+function annuler() {
+  enFile(() => appel(`${API}/annuler`, { method: "POST", body: JSON.stringify({ profile_id: PROFIL }) }))
+    .then(r => {
+      const i = historique.findLastIndex(h =>
+        h.carte.profile_id === r.profile_id && r.offres.includes(h.carte.offer_id));
+      if (i >= 0) {
+        const [h] = historique.splice(i, 1);
+        remettre(h.carte, h.decision === "like" ? 1 : -1);
+      } else {
+        message("Décision annulée (elle datait d'avant cette visite)");
+        recommencer();
+      }
+      majCompteurs();
+    })
+    .catch(e => message(e.status === 404 ? "Rien à annuler" : "Échec de l'annulation"));
+}
+
+function recommencer() {
+  pile.querySelectorAll(".carte").forEach(n => n.remove());
+  deck.forEach(c => { c.noeud = null; });
+  deck = [];
+  vues.clear();
+  fini = false;
+  charger();
+}
+
+/* ---------- Boutons, clavier, filtres ---------- */
+
+bLike.addEventListener("click", () => decider("like"));
+bNope.addEventListener("click", () => decider("nope"));
+bAnnuler.addEventListener("click", annuler);
+document.addEventListener("keydown", e => {
+  if (e.repeat || e.target.closest("select, input, textarea")) return;
+  if (e.key === "ArrowRight") decider("like");
+  else if (e.key === "ArrowLeft") decider("nope");
+  else if (e.key === "z" || e.key === "Backspace") annuler();
+});
+document.querySelectorAll("header select").forEach(s => s.addEventListener("change", () => s.form.submit()));
+
+charger();
+majCompteurs();
+</script>
+{% endraw %}
+</body>
+</html>

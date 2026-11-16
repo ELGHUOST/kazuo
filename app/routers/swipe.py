@@ -76,7 +76,7 @@ def decider(d: Decision) -> dict:
 
 @router.post("/annuler")
 def annuler(a: Annulation) -> dict:
-    """Annule la dernière décision (et celle de ses doublons). Renvoie l'offre concernée."""
+    """Annule la dernière décision (et celle de ses doublons). Renvoie les offres remises en jeu."""
     filtre, args = _filtre_profil(a.profile_id)
     with session() as conn:
         der = conn.execute(
@@ -85,13 +85,15 @@ def annuler(a: Annulation) -> dict:
                 ORDER BY m.decided_at DESC LIMIT 1""", args).fetchone()
         if der is None:
             raise HTTPException(status_code=404, detail="aucune décision à annuler")
-        n = conn.execute(
+        ids = [r["offer_id"] for r in conn.execute(
             """UPDATE matches SET decision = NULL, decided_at = NULL
                WHERE profile_id = ? AND decided_at = ?
                  AND offer_id IN (SELECT id FROM offers WHERE fingerprint =
-                                  (SELECT fingerprint FROM offers WHERE id = ?))""",
-            (der["profile_id"], der["decided_at"], der["offer_id"])).rowcount
-    return {"offer_id": der["offer_id"], "profile_id": der["profile_id"], "annulees": n}
+                                  (SELECT fingerprint FROM offers WHERE id = ?))
+               RETURNING offer_id""",
+            (der["profile_id"], der["decided_at"], der["offer_id"])).fetchall()]
+    return {"offer_id": der["offer_id"], "profile_id": der["profile_id"],
+            "annulees": len(ids), "offres": ids}
 
 
 @router.get("/stats")
