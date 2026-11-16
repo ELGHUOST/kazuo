@@ -9,10 +9,11 @@
 <p class="ligne">{{ offres|length }} offres uniques affichées · {{ total }} annonces en base</p>
 {% for o in offres %}
 <article class="carte">
-  <span class="badge">{{ o.source }}</span>{% if motifs.get(o.id) %}<span class="badge draft">exclue : {{ motifs[o.id] }}</span>{% endif %}
+  {% if o.score is not none %}<span class="badge {{ 'active' if o.score >= 7 else ('draft' if o.score >= 4 else 'paused') }}">{{ o.score }}/10</span>{% endif %}<span class="badge">{{ o.source }}</span>{% if motifs.get(o.id) %}<span class="badge draft">exclue : {{ motifs[o.id] }}</span>{% endif %}
   <a class="titre" href="{{ o.url|safe_url }}" target="_blank" rel="noopener noreferrer">{{ o.title }}</a>
   <div class="ligne">{{ o.company or "Entreprise non précisée" }} · {{ o.location or "Lieu non précisé" }}</div>
   <div class="ligne">{{ o.contract or "Contrat non précisé" }} · {{ o.salary or "Salaire non précisé" }} · publiée le {{ o.published_at|paris }}</div>
+  {% if o.explication %}<div class="ligne"><i>{{ o.explication }}</i></div>{% endif %}
   {% if o.description %}
   <div class="desc">{{ o.description[:300] }}{% if o.description|length > 300 %}…{% endif %}</div>
   {% endif %}

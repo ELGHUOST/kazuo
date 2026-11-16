@@ -162,6 +162,19 @@ def score_offer(payload: dict) -> dict:
                          "FROM profiles WHERE id = ?", (pid,)).fetchone()
     if o is None or p is None:
         raise ValueError(f"offre {oid} ou profil {pid} introuvable")
+    # Même intitulé et même entreprise déjà notés pour ce profil (ex. une annonce publiée
+    # dans plusieurs villes) : on recopie la note au lieu de rappeler l'IA.
+    with session() as conn:
+        deja = conn.execute(
+            """SELECT m.score, m.explanation, m.offer_id FROM matches AS m
+               JOIN offers AS x ON x.id = m.offer_id
+               WHERE m.profile_id = ? AND m.score IS NOT NULL AND m.offer_id != ?
+                 AND lower(x.title) = lower(?) AND lower(coalesce(x.company, '')) = lower(coalesce(?, ''))
+               LIMIT 1""", (pid, oid, o["title"], o["company"])).fetchone()
+        if deja is not None:
+            conn.execute("UPDATE matches SET score = ?, explanation = ? WHERE offer_id = ? AND profile_id = ?",
+                         (deja["score"], deja["explanation"], oid, pid))
+            return {"copie_de": deja["offer_id"], "notation": {"note": deja["score"]}}
     user = (
         f"CANDIDAT (profil « {p['name']} »)\n"
         f"Métiers visés : {', '.join(json.loads(p['jobs'])) or 'non précisés'}\n"

@@ -69,13 +69,17 @@ def health() -> dict:
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, profil: int | None = None, exclues: bool = False):
-    """Liste des offres, une carte par empreinte. Filtre facultatif : ?profil=1 (&exclues=1)."""
-    filtre, args = "", ()
-    if profil is not None:
-        # La condition vient d'une constante choisie ici ; la valeur passe par un « ? »
-        cond = "IS NOT NULL" if exclues else "IS NULL"
-        filtre = f"WHERE id IN (SELECT offer_id FROM matches WHERE profile_id = ? AND excluded_by {cond})"
+    """Une carte par empreinte. Sans filtre : toutes les offres, par date.
+    Avec ?profil=N : les offres de ce profil, triées par note (&exclues=1 : les offres écartées)."""
+    if profil is None:
+        source, args = "SELECT *, NULL AS score, NULL AS explication FROM offers", ()
+        tri = "published_at DESC"
+    else:
+        cond = "IS NOT NULL" if exclues else "IS NULL"  # constante choisie ici ; la valeur passe par « ? »
+        source = ("SELECT o.*, m.score AS score, m.explanation AS explication FROM offers AS o "
+                  f"JOIN matches AS m ON m.offer_id = o.id AND m.profile_id = ? WHERE m.excluded_by {cond}")
         args = (profil,)
+        tri = "score DESC NULLS LAST, published_at DESC"
     with session() as conn:
         total = conn.execute("SELECT COUNT(*) FROM offers").fetchone()[0]
         profils = conn.execute("SELECT id, name, status FROM profiles ORDER BY id").fetchall()
@@ -90,18 +94,17 @@ def index(request: Request, profil: int | None = None, exclues: bool = False):
                 (profil,))}
         offres = conn.execute(
             f"""SELECT * FROM (
-                    SELECT o.*,
+                    SELECT s.*,
                            COUNT(*) OVER (PARTITION BY fingerprint) AS nb,
                            ROW_NUMBER() OVER (PARTITION BY fingerprint
                                               ORDER BY published_at DESC, id DESC) AS rang
-                    FROM (SELECT * FROM offers {filtre}) AS o)
+                    FROM ({source}) AS s)
                 WHERE rang = 1
-                ORDER BY published_at DESC
+                ORDER BY {tri}
                 LIMIT 300""", args).fetchall()
         groupes: dict[str, list] = {}
         for r in conn.execute(
-            f"SELECT fingerprint, location, url, published_at FROM offers {filtre} ORDER BY published_at DESC",
-            args,
+            f"SELECT fingerprint, location, url, published_at FROM ({source}) ORDER BY published_at DESC", args
         ):
             groupes.setdefault(r["fingerprint"], []).append(r)
     return templates.TemplateResponse(request, "offers.html", {
