@@ -15,6 +15,11 @@ from app.sources.base import Offer
 log = logging.getLogger("kazuo.collect")
 
 MAX_RECHERCHES = 25  # garde-fou : au plus 25 recherches par collecte (≤ 75 appels Adzuna)
+MAX_ERREURS_RESEAU = 2  # coupe-circuit : au-delà, le réseau est en panne, inutile d'insister
+
+
+class CollecteInterrompue(RuntimeError):
+    """Collecte arrêtée par le coupe-circuit (réseau en panne, quota atteint)."""
 
 
 def _now() -> str:
@@ -83,6 +88,7 @@ def run(jours: int | None = 1, profile_id: int | None = None) -> list[dict]:
         log.warning("%s recherches demandées, limitées à %s", len(taches), MAX_RECHERCHES)
         taches = taches[:MAX_RECHERCHES]
     bilan = []
+    erreurs_reseau = 0
     for i, (p, q) in enumerate(taches):
         if i:
             time.sleep(adzuna.PAUSE_S)  # on espace les recherches entre elles
@@ -90,9 +96,25 @@ def run(jours: int | None = 1, profile_id: int | None = None) -> list[dict]:
             offers = adzuna.search(q, where=p["city"], distance_km=p["radius_km"], max_days_old=jours,
                                    category=p["adzuna_category"])
             stats = save(offers, p, q)
-        except (adzuna.AdzunaError, httpx.HTTPError) as e:
+        except httpx.TransportError as e:  # réseau : DNS, TLS, délai dépassé, connexion coupée
+            erreurs_reseau += 1
+            log.warning("[adzuna] %s / « %s » : erreur réseau %s/%s : %s",
+                        p["name"], q, erreurs_reseau, MAX_ERREURS_RESEAU, e)
+            bilan.append({"source": "adzuna", "profil": p["name"], "recherche": q, "erreur": f"réseau : {e}"})
+            if erreurs_reseau >= MAX_ERREURS_RESEAU:
+                raise CollecteInterrompue(f"{erreurs_reseau} erreurs réseau consécutives "
+                                          "(réseau coupé ou portail captif expiré ?)")
+            continue
+        except adzuna.AdzunaError as e:
+            if "Quota" in str(e):
+                raise CollecteInterrompue(str(e))  # insister ne ferait qu'aggraver le dépassement
             log.warning("[adzuna] %s / « %s » : %s", p["name"], q, e)
             stats = {"erreur": str(e)}  # une recherche en échec ne bloque pas les autres
+        except httpx.HTTPError as e:
+            log.warning("[adzuna] %s / « %s » : %s", p["name"], q, e)
+            stats = {"erreur": str(e)}
+        else:
+            erreurs_reseau = 0  # une réussite remet le compteur à zéro
         bilan.append({"source": "adzuna", "profil": p["name"], "recherche": q, **stats})
     return bilan
 
@@ -136,7 +158,11 @@ def main() -> None:
             total, changements = recalculer_exclusions(pid)
             print(f"Profil {pid} : {changements} changement(s), {total} offre(s) exclue(s) au total")
         return
-    bilan = run(args.jours, args.profil)
+    try:
+        bilan = run(args.jours, args.profil)
+    except CollecteInterrompue as e:
+        print(f"Collecte interrompue : {e}")
+        return
     if not bilan:
         print("Aucun profil actif : rien à collecter.")
     for b in bilan:

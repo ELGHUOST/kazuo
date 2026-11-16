@@ -1,0 +1,45 @@
+[Unit]
+Description=Kazuo - collecte quotidienne des offres et mise en file de la notation
+After=network-online.target kazuo.service
+Wants=network-online.target
+# Après 4 lancements en 6 h, systemd abandonne jusqu'au prochain déclenchement du timer
+StartLimitIntervalSec=6h
+StartLimitBurst=4
+
+[Service]
+Type=oneshot
+User=kazuo
+Group=kazuo
+WorkingDirectory=/opt/kazuo
+Environment=PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/kazuo/.venv/bin/python -m app.services.quotidien
+# Collecte interrompue (réseau coupé, portail captif) : nouvel essai 30 min plus tard
+Restart=on-failure
+RestartSec=30min
+TimeoutStartSec=30min
+UMask=0027
+
+# Même durcissement que kazuo.service
+ProtectSystem=strict
+ReadWritePaths=/var/lib/kazuo
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=yes
+RemoveIPC=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectHostname=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallErrorNumber=EPERM
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes

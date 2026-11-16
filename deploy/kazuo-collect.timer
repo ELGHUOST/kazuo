@@ -1,0 +1,11 @@
+[Unit]
+Description=Kazuo - collecte chaque matin à 7h30
+
+[Timer]
+OnCalendar=*-*-* 07:30:00 Europe/Paris
+# Si le CT était éteint à 7h30, la collecte est lancée dès son démarrage
+Persistent=true
+Unit=kazuo-collect.service
+
+[Install]
+WantedBy=timers.target
