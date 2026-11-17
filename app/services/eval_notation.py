@@ -6,6 +6,7 @@ Rejoue la notation (sans rien écrire en base) et compare au résultat attendu.
 import argparse
 
 from app.db import session
+from app.llm.client import LLMError
 from app.llm.tasks import evaluer
 from app.services.scoring import note_finale
 
@@ -44,7 +45,14 @@ def main() -> None:
         if r is None:
             print(f"  ?          {motif} : introuvable")
             continue
-        facteurs, explication, _ = evaluer(r["id"], args.profil)
+        for essai in range(1, 4):  # comme la file : 3 essais face à une réponse ratée de l'IA
+            try:
+                facteurs, explication, _ = evaluer(r["id"], args.profil)
+                break
+            except LLMError as e:
+                print(f"  ⚠ {r['title'][:40]} : essai {essai}/3 en échec ({e})")
+        else:
+            continue  # 3 échecs : cas ignoré, non compté
         note = note_finale(facteurs)
         bon = mini <= note <= maxi
         conformes += bon
