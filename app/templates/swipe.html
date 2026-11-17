@@ -48,17 +48,20 @@
   header { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: .55rem .8rem; padding: .7rem 0 .4rem; }
   .logo { font-family: var(--display); font-size: clamp(1.3rem, 6vw, 1.65rem); line-height: 1; color: var(--washi); text-decoration: none;
           letter-spacing: .04em; text-shadow: 3px 3px 0 var(--shu); }
-  header form { justify-self: end; display: flex; justify-content: flex-end; gap: .4rem; min-width: 0; }
+  header nav { justify-self: end; display: flex; gap: .2rem; }
+  header nav a { padding: .3rem .75rem; border-radius: 999px; color: #cfcaf0; font-weight: 600; text-decoration: none; }
+  header nav a[aria-current="page"] { background: var(--washi); color: var(--sumi); }
+  .reglages { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: .45rem .6rem; }
+  .reglages form { display: flex; gap: .4rem; min-width: 0; }
   header select { min-width: 0; font: inherit; font-size: 16px; padding: .25rem .35rem; border: 2px solid rgba(251, 247, 238, .28);
                   border-radius: 8px; background: #221d55; color: var(--washi); }
-  .compteurs { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: .45rem; }
-  .pastille { padding: .15rem .65rem; border: 2px solid rgba(251, 247, 238, .22); border-radius: 999px; color: #cfcaf0; font-size: .85rem; }
-  .pastille b { margin-right: .25rem; font-family: var(--display); font-weight: 400; color: var(--washi); }
-  .pastille.ret b { color: var(--shu); }
-  .pastille.ecart b { color: #b9b6dc; }
 
   /* ---------- La pile et la carte (une planche de manga) ---------- */
-  #pile { position: relative; flex: 1; min-height: 0; margin-top: .5rem; }
+  #pile { position: relative; flex: 1; min-height: 0; margin-top: 1rem; }
+  .reste { position: absolute; top: -.85rem; left: .9rem; z-index: 6; padding: .1rem .7rem; border: 2.5px solid var(--sumi);
+           border-radius: 999px; background: var(--washi); color: var(--sumi); box-shadow: 3px 3px 0 var(--shu);
+           font-size: .82rem; font-weight: 700; pointer-events: none; transform: rotate(-3deg); }
+  .reste b { margin-right: .2rem; font-family: var(--display); font-weight: 400; }
   .carte {
     --ombre: var(--neon); --force: 0;
     position: absolute; inset: 0 10px 10px 0; display: flex; flex-direction: column; overflow: hidden;
@@ -171,6 +174,11 @@
   #b-like svg { fill: currentColor; stroke: none; }
   #b-annuler { width: 3rem; height: 3rem; background: var(--ai); color: var(--kin); border-color: var(--kin); }
   #actions button:active:not(:disabled) { transform: translate(4px, 4px); box-shadow: none; }
+  #actions button { position: relative; }
+  .compte { position: absolute; top: -.4rem; right: -.45rem; display: grid; place-items: center; min-width: 1.7rem; height: 1.7rem;
+            padding: 0 .35rem; border: 2.5px solid var(--sumi); border-radius: 999px; background: var(--washi); color: var(--sumi);
+            font-family: var(--display); font-size: .8rem; line-height: 1; }
+  #b-like .compte { background: var(--kin); }
   #actions button:disabled { opacity: .35; cursor: default; }
 
   #bulle { position: fixed; left: 50%; bottom: calc(7rem + env(safe-area-inset-bottom)); z-index: 10; max-width: 90vw;
@@ -178,6 +186,24 @@
            box-shadow: 4px 4px 0 var(--shu); font-size: .9rem; font-weight: 600;
            opacity: 0; transform: translateX(-50%); transition: opacity .2s; pointer-events: none; }
   #bulle.visible { opacity: 1; }
+
+  /* Écran d'ordinateur : une carte plus large, des textes plus grands. Le téléphone n'est pas concerné. */
+  @media (min-width: 900px) {
+    header, #pile, #actions { width: min(100% - 4rem, 46rem); }
+    .entete { padding: 1.4rem 1.6rem 1.1rem; }
+    .corps { padding: 1.4rem 1.6rem 1.2rem; }
+    .pied { padding: .9rem 1.6rem 1rem; }
+    .titre { font-size: 1.6rem; }
+    .societe { font-size: 1.1rem; }
+    .sceau b { width: 4.2rem; height: 4.2rem; font-size: 2.2rem; }
+    .sceau span { font-size: .85rem; }
+    .puce { font-size: .88rem; }
+    .parole { font-size: 1.05rem; }
+    .facteur { font-size: .9rem; }
+    .description { font-size: 1rem; }
+    .tampon { top: 6.5rem; }
+    .tampon b { font-size: 2.8rem; }
+  }
 
   @media (prefers-reduced-motion: reduce) {
     .carte, .carte.envol { transition: none !important; }
@@ -189,7 +215,9 @@
 </head>
 <body data-profil="{{ profil if profil is not none else '' }}" data-note-min="{{ note_min }}">
 <header>
-  <a class="logo" href="/" title="Retour à la liste des offres">カズオ</a>
+  <a class="logo" href="/" title="Offres">カズオ</a>
+  <nav aria-label="Menu principal"><a href="/">Offres</a><a href="/swipe" aria-current="page">Swipe</a><a href="/profils">Profils</a></nav>
+  <div class="reglages">
   <form method="get" action="/swipe">
     <select name="profil" aria-label="Profil">
       <option value="">Tous profils</option>
@@ -204,14 +232,11 @@
     </select>
     <noscript><button>OK</button></noscript>
   </form>
-  <div class="compteurs">
-    <span class="pastille"><b id="c-trier">–</b>à trier</span>
-    <span class="pastille ret"><b id="c-ret">–</b>retenues</span>
-    <span class="pastille ecart"><b id="c-ecart">–</b>écartées</span>
   </div>
 </header>
 
 <main id="pile">
+  <span class="reste" id="reste" hidden><b id="c-trier">–</b>à trier</span>
   <div id="vide">
     <p class="kanji-fin" id="vide-kanji" aria-hidden="true" hidden>完</p>
     <p class="gros" id="vide-titre">Chargement des offres…</p>
@@ -224,12 +249,14 @@
 <nav id="actions">
   <button id="b-nope" type="button" aria-label="Écarter (flèche gauche)" title="Écarter (←)">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    <span class="compte" id="c-ecart" hidden></span>
   </button>
   <button id="b-annuler" type="button" aria-label="Annuler le dernier choix (Z)" title="Annuler (Z)">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5 4 10l5 5M4 10h10a6 6 0 0 1 0 12h-3"/></svg>
   </button>
   <button id="b-like" type="button" aria-label="Retenir (flèche droite)" title="Retenir (→)">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.6 4.3 12.9a4.6 4.6 0 0 1 6.5-6.5L12 7.6l1.2-1.2a4.6 4.6 0 0 1 6.5 6.5z"/></svg>
+    <span class="compte" id="c-ret" hidden></span>
   </button>
 </nav>
 <div id="bulle" role="status"></div>
@@ -267,7 +294,7 @@ const API = "/api/swipe";
 const PROFIL = document.body.dataset.profil === "" ? null : Number(document.body.dataset.profil);
 const NOTE_MIN = Number(document.body.dataset.noteMin);
 const SEUIL = 0.3;                   // part de la largeur de la carte à dépasser pour valider un swipe
-const KANJI = ["〇", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十"];
+const KANJI = ["〇", "一", "二", "三", "四", "五", "六", "七", "八", "九", "満"];   // 満 : comme dans 満点, la note parfaite
 const REDUIT = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const $ = id => document.getElementById(id);
@@ -321,8 +348,13 @@ async function majCompteurs() {
   try {
     const s = await appel(`${API}/stats?${requete()}`);
     $("c-trier").textContent = s.a_trier;
-    $("c-ret").textContent = s.retenues;
-    $("c-ecart").textContent = s.ecartees;
+    $("reste").hidden = s.a_trier === 0;
+    for (const [id, n, mot] of [["c-ret", s.retenues, "retenue"], ["c-ecart", s.ecartees, "écartée"]]) {
+      const pastille = $(id);         // le nombre de décisions, posé sur le bouton correspondant
+      pastille.textContent = n;
+      pastille.title = `${n} ${mot}${n > 1 ? "s" : ""}`;
+      pastille.hidden = n === 0;
+    }
   } catch { /* simple indicateur : il sera remis à jour au prochain geste */ }
 }
 

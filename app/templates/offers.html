@@ -1,35 +1,85 @@
-{% extends "base.html" %}
-{% block title %}Kazuo — offres{% endblock %}
+{% extends "theme.html" %}
+{% set actif = "offres" %}
+{% set kanji = ["〇", "一", "二", "三", "四", "五", "六", "七", "八", "九", "満"] %}{# 満 : comme dans 満点, la note parfaite #}
+{% block title %}Kazuo · offres{% endblock %}
 {% block content %}
-<p class="ligne">Filtrer : <a href="/">toutes</a>{% for pr in profils %} · <a href="/?profil={{ pr.id }}">{{ pr.name }}</a>{% endfor %}</p>
+<h1>Offres</h1>
+<p class="chapo">Toutes les annonces collectées, une seule fois par groupe de doublons.
+  Choisis un profil pour les voir notées et triées par note.</p>
+
+<nav class="filtres" aria-label="Filtrer par profil">
+  <a href="/"{% if profil is none %} aria-current="page"{% endif %}>Toutes</a>
+  {% for pr in profils %}
+  <a href="/?profil={{ pr.id }}"{% if profil == pr.id %} aria-current="page"{% endif %}>{{ pr.name }}</a>
+  {% endfor %}
+</nav>
+
 {% if profil is not none %}
-<p class="ligne">{% if exclues %}Offres écartées par les mots exclus — <a href="/?profil={{ profil }}">revenir aux offres retenues</a>
-{% else %}{{ nb_exclues }} offre(s) écartée(s) par les mots exclus — <a href="/?profil={{ profil }}&exclues=1">les voir</a>{% endif %}</p>
-{% endif %}
-<p class="ligne">{{ offres|length }} offres uniques affichées · {{ total }} annonces en base</p>
-{% for o in offres %}
-<article class="carte">
-  {% if o.score is not none %}<span class="badge {{ 'active' if o.score >= 7 else ('draft' if o.score >= 4 else 'paused') }}">{{ o.score }}/10</span>{% endif %}<span class="badge">{{ o.source }}</span>{% if motifs.get(o.id) %}<span class="badge draft">exclue : {{ motifs[o.id] }}</span>{% endif %}
-  <a class="titre" href="{{ o.url|safe_url }}" target="_blank" rel="noopener noreferrer">{{ o.title }}</a>
-  <div class="ligne">{{ o.company or "Entreprise non précisée" }} · {{ o.location or "Lieu non précisé" }}</div>
-  <div class="ligne">{{ o.contract or "Contrat non précisé" }} · {{ o.salary or "Salaire non précisé" }} · publiée le {{ o.published_at|paris }}</div>
-  {% if o.explication %}<div class="ligne"><i>{{ o.explication }}</i></div>{% endif %}
-  {% if o.facteurs %}{% set f = o.facteurs|fromjson %}<div class="ligne">métier {{ f.metier }}/3 · niveau {{ f.niveau }}/2 · compétences {{ f.competences }}/3 · contrat {{ "compatible" if f.contrat else "incompatible" }}</div>{% endif %}
-  {% if o.description %}
-  <div class="desc">{{ o.description[:300] }}{% if o.description|length > 300 %}…{% endif %}</div>
+  {% if exclues %}
+  <p class="info">Offres mises de côté par les mots exclus. <a href="/?profil={{ profil }}">Revenir aux offres retenues</a></p>
+  {% else %}
+  <p class="info">
+    {% if nb_exclues %}{{ nb_exclues }} offre{{ "s" if nb_exclues > 1 }} mise{{ "s" if nb_exclues > 1 }} de côté par les mots exclus.
+      <a href="/?profil={{ profil }}&exclues=1">Les voir</a>{% endif %}
+  </p>
+  <p><a class="bouton principal" href="/swipe?profil={{ profil }}">Trier ces offres</a></p>
   {% endif %}
+{% endif %}
+
+<p class="info">{{ offres|length }} offre{{ "s" if offres|length > 1 }} affichée{{ "s" if offres|length > 1 }} sur {{ total }} annonces collectées.</p>
+
+{% for o in offres %}
+<article class="case offre">
+  <div class="entete-offre">
+    <div class="titres">
+      <h2><a href="{{ o.url|safe_url }}" target="_blank" rel="noopener noreferrer">{{ o.title }}</a></h2>
+      <p class="societe">{{ o.company or "Entreprise non précisée" }}</p>
+    </div>
+    {% if o.score is not none %}
+    <span class="sceau {{ 'n-haute' if o.score >= 8 else 'n-moyenne' if o.score >= 6 else 'n-basse' if o.score >= 4 else 'n-faible' }}"
+          role="img" aria-label="Note : {{ o.score }} sur 10"><b>{{ kanji[o.score] }}</b><span>{{ o.score }}/10</span></span>
+    {% endif %}
+  </div>
+
+  <div class="puces">
+    {% if o.decision == "like" %}<span class="puce retenue">retenue</span>{% elif o.decision == "nope" %}<span class="puce ecartee">écartée</span>{% endif %}
+    {% if motifs.get(o.id) %}<span class="puce exclue">exclue : {{ motifs[o.id] }}</span>{% endif %}
+    <span class="puce">{{ o.location or "Lieu non précisé" }}</span>
+    {% if o.contract %}<span class="puce">{{ o.contract }}</span>{% endif %}
+    {% if o.salary %}<span class="puce salaire">{{ o.salary }}</span>{% endif %}
+    {% set d = o.published_at|paris %}
+    <span class="puce">publiée le {{ d[:10] if o.published_at else d }}</span>
+  </div>
+
+  {% if o.explication %}<p class="parole">{{ o.explication }}</p>{% endif %}
+  {% if o.facteurs %}{% set f = o.facteurs|fromjson %}
+  <div class="facteurs">
+    {% for nom, val, max in [("métier", f.metier, 3), ("niveau", f.niveau, 2), ("compétences", f.competences, 3), ("contrat", f.contrat, 1)] %}
+    <div class="facteur"><span>{{ nom }}</span><span class="barre" role="img" aria-label="{{ val }} sur {{ max }}">{% for i in range(max) %}<i{% if i < val %} class="plein"{% endif %}></i>{% endfor %}</span></div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if o.description %}
+  <p class="description">{{ o.description[:300] }}{% if o.description|length > 300 %}…{% endif %}</p>
+  {% endif %}
+
   {% if o.nb > 1 %}
-  <details>
-    <summary>{{ o.nb }} annonces similaires</summary>
+  <details class="similaires">
+    <summary>Publiée {{ o.nb }} fois</summary>
     <ul>
       {% for a in groupes[o.fingerprint] %}
-      <li><a href="{{ a.url|safe_url }}" target="_blank" rel="noopener noreferrer">{{ a.location or "Lieu non précisé" }}</a> — {{ a.published_at|paris }}</li>
+      <li><a href="{{ a.url|safe_url }}" target="_blank" rel="noopener noreferrer">{{ a.location or "Lieu non précisé" }}</a>, le {{ (a.published_at|paris)[:10] }}</li>
       {% endfor %}
     </ul>
   </details>
   {% endif %}
 </article>
 {% else %}
-<p>Aucune offre en base. Lance une collecte : <code>python -m app.services.collect</code></p>
+<section class="case">
+  <h2>Aucune offre pour l'instant</h2>
+  <p class="but">La collecte passe chaque jour à 7 h 30. Pour la lancer tout de suite, sur le serveur :
+    <code>systemctl start kazuo-collect</code></p>
+</section>
 {% endfor %}
 {% endblock %}

@@ -78,11 +78,13 @@ def index(request: Request, profil: int | None = None, exclues: bool = False):
     """Une carte par empreinte. Sans filtre : toutes les offres, par date.
     Avec ?profil=N : les offres de ce profil, triées par note (&exclues=1 : les offres écartées)."""
     if profil is None:
-        source, args = "SELECT *, NULL AS score, NULL AS explication, NULL AS facteurs FROM offers", ()
+        source, args = ("SELECT *, NULL AS score, NULL AS explication, NULL AS facteurs, NULL AS decision "
+                        "FROM offers"), ()
         tri = "published_at DESC"
     else:
         cond = "IS NOT NULL" if exclues else "IS NULL"  # constante choisie ici ; la valeur passe par « ? »
-        source = ("SELECT o.*, m.score AS score, m.explanation AS explication, m.factors AS facteurs FROM offers AS o "
+        source = ("SELECT o.*, m.score AS score, m.explanation AS explication, m.factors AS facteurs, "
+                  "m.decision AS decision FROM offers AS o "
                   f"JOIN matches AS m ON m.offer_id = o.id AND m.profile_id = ? WHERE m.excluded_by {cond}")
         args = (profil,)
         tri = "score DESC NULLS LAST, published_at DESC"
