@@ -192,7 +192,7 @@ SYSTEME_NOTATION = (
     "- accessible : ouvert à un débutant ayant le diplôme du candidat ;\n"
     "- un_peu_au_dessus : courte expérience souhaitée (1 à 2 ans), intitulé « ingénieur » sans autre "
     "indice de séniorité, ou niveau incertain ;\n"
-    "- inaccessible : senior, confirmé, expert, lead, référent, architecte, responsable ou manager ; 3 ans "
+    "- inaccessible : senior, confirmé, expert, lead, architecte, responsable ou manager, ou « référent » dans l'intitulé du poste ; 3 ans "
     "d'expérience ou plus ; salaire supérieur à 45 000 €/an ; ou formation d'un niveau inférieur au "
     "diplôme du candidat.\n"
     "Équivalences : BUT et licence = Bac+3 ; DUT et BTS = Bac+2 ; master et diplôme d'ingénieur = Bac+5.\n"
