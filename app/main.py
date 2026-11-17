@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.config import settings
@@ -18,8 +19,6 @@ from app.routers import pages_profils
 from app.routers import profiles as profiles_router
 from app.routers import swipe as swipe_router
 from app.routers import pages_swipe
-from pathlib import Path
-from fastapi.staticfiles import StaticFiles
 from app.web import templates
 
 TZ = ZoneInfo(settings.tz)

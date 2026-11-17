@@ -1,17 +1,38 @@
-{% extends "base.html" %}
-{% block title %}Kazuo — profils{% endblock %}
+{% extends "theme.html" %}
+{% set actif = "profils" %}
+{% block title %}Kazuo · profils{% endblock %}
 {% block content %}
-<h2>Profils de recherche</h2>
-<p class="ligne">Un profil n'est utilisé par la collecte qu'une fois <b>actif</b>.
-  Pour en créer un : <a href="/docs#/Profils/creer_profil_api_profiles_post">/docs → POST /api/profiles</a>.</p>
+<h1>Profils</h1>
+<p class="chapo">Un profil, c'est un CV et un type de poste. Chaque matin, la collecte cherche des offres pour chaque profil actif.</p>
+<p><a class="bouton principal" href="/profils/nouveau">Nouveau profil</a></p>
+
 {% for p in profils %}
-<article class="carte">
-  <span class="badge {{ p.status }}">{{ libelles[p.status] }}</span>
-  <a class="titre" href="/profils/{{ p.id }}">{{ p.name }}</a>
-  <div class="ligne">{{ p.first_name }} · {{ p.city }} ({{ p.radius_km }} km){% if p.adzuna_category %} · {{ p.adzuna_category }}{% endif %} · {{ p.contracts|join(", ") or "aucun contrat" }}</div>
-  <div class="ligne">Recherches : {{ p.keywords|join(" · ") or "aucune" }}</div>
+<article class="case profil">
+  <div class="entete-profil">
+    <div>
+      <h2><a href="/profils/{{ p.id }}">{{ p.name }}</a></h2>
+      <p class="but">{{ p.city }}, dans un rayon de {{ p.radius_km }} km{% if p.adzuna_category %}, secteur {{ categories.get(p.adzuna_category, p.adzuna_category)|lower }}{% endif %}.</p>
+    </div>
+    <span class="statut st-{{ p.status }}"><b><span class="k">{{ sceaux[p.status] }}</span></b><small>{{ libelles[p.status] }}</small></span>
+  </div>
+  <div class="puces">
+    {% for c in p.contracts %}<span class="puce">{{ c }}</span>{% else %}<span class="puce">aucun contrat choisi</span>{% endfor %}
+  </div>
+  {% if p.keywords %}<p class="recherches">Recherches : {{ p.keywords|join(", ") }}</p>{% endif %}
+  <div class="pied-profil">
+    {% if p.status == "active" %}
+      {% set n = a_trier.get(p.id, 0) %}
+      {% if n %}<a class="bouton principal" href="/swipe?profil={{ p.id }}">{{ n }} offre{{ "s" if n > 1 }} à trier</a>
+      {% else %}<p class="but">Rien à trier pour l'instant.</p>{% endif %}
+    {% elif p.status == "paused" %}<p class="but">En pause : la collecte l'ignore.</p>
+    {% endif %}
+    <a class="bouton secondaire" href="/profils/{{ p.id }}">{{ "Relire et activer" if p.status == "draft" else "Modifier" }}</a>
+  </div>
 </article>
 {% else %}
-<p>Aucun profil.</p>
+<section class="case">
+  <h2>Aucun profil pour l'instant</h2>
+  <p class="but">Crée le premier à partir de ton CV : l'IA te proposera une fiche à relire.</p>
+</section>
 {% endfor %}
 {% endblock %}

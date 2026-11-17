@@ -1,0 +1,171 @@
+/* Kazuo : thème « planche de manga sur nuit néon ».
+   Utilisé par les pages qui héritent de theme.html (le swipe a encore son propre CSS intégré). */
+
+@font-face {
+  font-family: "Dela Gothic One";
+  src: url("/static/fonts/dela-gothic-one.woff2") format("woff2");
+  font-display: swap;
+}
+
+:root {
+  /* Les 6 couleurs de l'appli : change-les ici, tout suit */
+  --ai: #17133d;      /* 藍 indigo : la nuit */
+  --sumi: #0e0c1d;    /* 墨 encre : traits et contours */
+  --washi: #fbf7ee;   /* 和紙 papier : les cases de manga */
+  --shu: #ff3b2f;     /* 朱 vermillon : le sceau, l'action principale */
+  --neon: #3ef2ff;    /* néon : la touche cyber */
+  --kin: #f5c542;     /* 金 or */
+  --gris: #4a4668;    /* texte secondaire sur papier */
+  --clair: #cfcaf0;   /* texte secondaire sur la nuit */
+  --display: "Dela Gothic One", "Hiragino Sans", "Noto Sans CJK JP", system-ui, sans-serif;
+  --texte: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { background: var(--ai); }
+body {
+  margin: 0; min-height: 100dvh; color: var(--washi); font-family: var(--texte); line-height: 1.5;
+  background: radial-gradient(120% 50% at 50% 115%, rgba(62, 242, 255, .18), transparent 60%) fixed, var(--ai);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  -webkit-tap-highlight-color: transparent;
+}
+body::before {          /* trame de points (screentone) qui monte du bas de l'écran */
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(circle, rgba(251, 247, 238, .1) 1.2px, transparent 1.7px) 0 0 / 8px 8px;
+  -webkit-mask-image: linear-gradient(to top, #000, transparent 55%);
+          mask-image: linear-gradient(to top, #000, transparent 55%);
+}
+:focus-visible { outline: 3px solid var(--neon); outline-offset: 3px; }
+.page { width: min(100% - 2rem, 42rem); margin: 0 auto; padding-bottom: 3rem; }
+
+/* ---------- En-tête du site ---------- */
+.site { display: flex; align-items: center; gap: 1rem; padding: .8rem 0 1rem; }
+.logo { font-family: var(--display); font-size: 1.6rem; line-height: 1; color: var(--washi); text-decoration: none;
+        letter-spacing: .04em; text-shadow: 3px 3px 0 var(--shu); }
+.site nav { display: flex; gap: .2rem; margin-left: auto; }
+.site nav a { padding: .3rem .75rem; border-radius: 999px; color: var(--clair); font-weight: 600; text-decoration: none; }
+.site nav a[aria-current="page"] { background: var(--washi); color: var(--sumi); }
+
+/* ---------- Titres ---------- */
+h1 { margin: .3rem 0 .4rem; font-family: var(--display); font-weight: 400; font-size: clamp(1.6rem, 6vw, 2.1rem); line-height: 1.15; }
+.chapo { max-width: 36rem; margin: 0 0 1.2rem; color: var(--clair); }
+.retour { color: var(--clair); font-weight: 600; text-decoration: none; }
+.retour:hover { color: var(--washi); }
+
+/* ---------- Cases (panneaux de manga) ---------- */
+.case { position: relative; margin: 1.6rem 0; padding: 1.2rem 1.1rem 1.15rem; border: 3px solid var(--sumi); border-radius: 10px;
+        background: var(--washi); color: var(--sumi); box-shadow: 7px 7px 0 var(--neon); }
+.case.numerotee { padding-top: 1.7rem; }
+.case.annexe { background: #e9e5f3; box-shadow: none; }
+.case h2 { margin: 0 0 .25rem; font-family: var(--display); font-weight: 400; font-size: 1.2rem; line-height: 1.25; }
+.case h2 a { color: inherit; text-decoration: none; }
+.case h2 a:hover { text-decoration: underline; text-decoration-thickness: 2px; }
+.but { margin: 0 0 .9rem; color: var(--gris); font-size: .95rem; }
+.numero { position: absolute; top: -1.15rem; left: -.7rem; display: grid; place-items: center; width: 2.5rem; height: 2.5rem;
+          border: 3px solid var(--sumi); border-radius: 50%; background: var(--shu); color: var(--washi);
+          font-family: var(--display); font-size: 1.2rem; line-height: 1; transform: rotate(-6deg); }
+
+/* ---------- Champs ---------- */
+.champ { display: block; margin: 1rem 0 0; }
+.nom { display: block; margin-bottom: .3rem; font-weight: 700; }
+.aide { display: block; margin: -.15rem 0 .4rem; color: var(--gris); font-size: .85rem; font-weight: 400; }
+input[type=text], input[type=number], select, textarea {
+  width: 100%; padding: .55rem .65rem; border: 2px solid var(--sumi); border-radius: 8px;
+  background: #fff; color: var(--sumi); font: inherit; font-size: 16px;   /* 16 px : pas de zoom automatique sur iPhone */
+}
+textarea { min-height: 3.2rem; resize: vertical; line-height: 1.45; }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid var(--neon); outline-offset: 1px; }
+.rayon { display: flex; align-items: center; gap: .9rem; }
+.rayon input { flex: 1; accent-color: var(--shu); }
+.rayon output { flex: none; min-width: 4.6rem; font-family: var(--display); text-align: right; }
+.duo { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1rem; }
+.duo .champ { margin-top: 1rem; }
+@media (max-width: 480px) { .duo { grid-template-columns: 1fr; } }
+
+/* Cases à cocher présentées comme des étiquettes (la vraie case reste là, invisible, pour le clavier) */
+.choix { display: flex; flex-wrap: wrap; gap: .45rem; }
+.choix label { position: relative; }
+.choix input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+.choix span { display: inline-block; padding: .3rem .85rem; border: 2px solid var(--sumi); border-radius: 999px;
+              background: #fff; font-size: .9rem; font-weight: 600; }
+.choix input:checked + span { background: var(--sumi); color: var(--washi); }
+.choix input:focus-visible + span { outline: 3px solid var(--neon); outline-offset: 2px; }
+
+/* ---------- Zone de dépôt du CV ---------- */
+.depot { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .4rem;
+         min-height: 11rem; padding: 1.4rem 1rem; border: 3px dashed var(--sumi); border-radius: 12px; text-align: center;
+         background: radial-gradient(circle, rgba(14, 12, 29, .12) 1.1px, transparent 1.6px) 0 0 / 7px 7px, #fff;
+         transition: background-color .15s, border-color .15s; }
+.depot input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }  /* toute la zone est le bouton */
+.depot:focus-within { outline: 3px solid var(--neon); outline-offset: 3px; }
+.depot .grand { font-family: var(--display); font-size: 1.45rem; line-height: 1.2; }
+.depot .petit { color: var(--gris); font-size: .9rem; }
+.depot.survol { border-style: solid; border-color: var(--shu); background-color: #fff1ef; }
+.depot.pret { border-style: solid; }
+.depot.pret .grand { color: var(--shu); }
+.depot.probleme { border-color: var(--shu); }
+.depot.probleme .grand { font-family: var(--texte); font-size: 1.05rem; font-weight: 800; color: var(--shu); }
+.verrouille .depot { opacity: .45; }
+.verrou { margin: .7rem 0 0; color: var(--gris); font-weight: 700; }
+
+/* ---------- Boutons ---------- */
+.bouton { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; padding: .7rem 1.2rem;
+          border: 3px solid var(--sumi); border-radius: 10px; font-family: var(--display); font-size: 1rem; line-height: 1.2;
+          text-decoration: none; cursor: pointer; transition: transform .08s, box-shadow .08s; }
+.bouton.principal { background: var(--shu); color: var(--washi); box-shadow: 4px 4px 0 var(--kin); }
+.bouton.secondaire { background: var(--washi); color: var(--sumi); box-shadow: 4px 4px 0 var(--neon); }
+.bouton.discret { border-color: rgba(251, 247, 238, .35); background: transparent; color: var(--washi);
+                  font-family: var(--texte); font-weight: 700; }
+.bouton.large { width: 100%; padding: .9rem; font-size: 1.1rem; }
+.bouton:active:not(:disabled) { transform: translate(4px, 4px); box-shadow: none; }
+.bouton:disabled { opacity: .4; cursor: default; }
+
+/* Barre d'actions collée en bas de l'écran pendant qu'on fait défiler le formulaire */
+.actions { position: sticky; bottom: 0; z-index: 5; display: flex; justify-content: flex-end; gap: .6rem;
+           margin: 1.6rem -1rem 0; padding: .65rem 1rem calc(.65rem + env(safe-area-inset-bottom));
+           background: var(--ai); border-top: 2px solid rgba(251, 247, 238, .15); }
+.actions .bouton { flex: 1 1 auto; padding: .55rem .8rem; font-size: .92rem; }
+.actions .discret { flex: 0 1 auto; order: -1; }   /* affiché à gauche, mais dernier dans le code (voir le gabarit) */
+
+/* ---------- Sceaux d'état d'un profil ---------- */
+.statut { flex: none; display: inline-flex; flex-direction: column; align-items: center; gap: .2rem; transform: rotate(-5deg); }
+.statut b { display: grid; place-items: center; width: 2.9rem; min-height: 3.5rem; padding: .3rem 0;
+            border: 3px solid var(--sumi); border-radius: 8px; background: var(--teinte); color: var(--encre);
+            box-shadow: inset 0 0 0 2px var(--teinte), inset 0 0 0 4px var(--washi);
+            font-family: var(--display); font-weight: 400; font-size: 1rem; }
+.statut .k { writing-mode: vertical-rl; letter-spacing: .06em; }
+.statut small { font-size: .75rem; font-weight: 700; opacity: .8; }
+.st-draft  { --teinte: var(--kin);  --encre: var(--sumi); }
+.st-active { --teinte: var(--shu);  --encre: var(--washi); }
+.st-paused { --teinte: #c9c6dd;     --encre: var(--sumi); }
+
+/* ---------- Messages ---------- */
+.message { margin: 1rem 0; padding: .7rem .9rem; border: 2.5px solid var(--sumi); border-radius: 8px;
+           background: var(--washi); color: var(--sumi); font-weight: 600; box-shadow: 4px 4px 0 var(--neon); }
+.message.erreur { box-shadow: 4px 4px 0 var(--shu); }
+
+/* ---------- Attente de l'analyse ---------- */
+.attente { text-align: center; }
+.attente .kanji { margin: .2rem 0 .6rem; font-family: var(--display); font-size: 3.2rem; line-height: 1; letter-spacing: .12em; }
+.points { display: inline-flex; gap: .4rem; }
+.points i { width: .65rem; height: .65rem; border-radius: 50%; background: var(--shu); animation: point 1.2s infinite ease-in-out; }
+.points i:nth-child(2) { animation-delay: .2s; }
+.points i:nth-child(3) { animation-delay: .4s; }
+@keyframes point { 0%, 80%, 100% { transform: scale(.5); opacity: .4; } 40% { transform: scale(1); opacity: 1; } }
+
+/* ---------- Liste des profils ---------- */
+.entete-profil { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.entete-profil h1 { margin-top: .2rem; }
+.profil .entete-profil .but { margin-bottom: 0; }
+.puces { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .8rem; }
+.puce { padding: .1rem .6rem; border: 2px solid var(--sumi); border-radius: 999px; background: #fff; font-size: .8rem; font-weight: 600; }
+.recherches { margin: .7rem 0 0; color: var(--gris); font-size: .9rem; }
+.pied-profil { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .7rem;
+               margin-top: 1rem; padding-top: .9rem; border-top: 2px solid var(--sumi); }
+.pied-profil .but { margin: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .points i { animation: none; opacity: 1; transform: none; }
+  .bouton, .depot { transition: none; }
+}

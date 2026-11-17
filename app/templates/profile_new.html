@@ -1,0 +1,126 @@
+{% extends "theme.html" %}
+{% set actif = "profils" %}
+{% block title %}Kazuo · nouveau profil{% endblock %}
+{% block content %}
+<p><a class="retour" href="/profils">← Profils</a></p>
+<h1>Nouveau profil</h1>
+<p class="chapo">Tu dis ce que tu cherches, tu déposes ton CV, et l'IA te propose une fiche.
+  Rien n'est utilisé avant que tu l'aies relue et activée.</p>
+{% if erreur %}<p class="message erreur" role="alert">{{ erreur }}</p>{% endif %}
+
+<form id="creation" method="post" action="/profils/nouveau" enctype="multipart/form-data">
+  <section class="case numerotee" id="case-infos">
+    <span class="numero" aria-hidden="true">1</span>
+    <h2>Avant de déposer ton CV</h2>
+    <p class="but">Ces informations guident l'IA quand elle lit ton CV.</p>
+    <label class="champ"><span class="nom">Nom du profil</span>
+      <span class="aide">Le type de poste, pour t'y retrouver : « Grande surface », « Réseau / Cloud »…</span>
+      <input type="text" name="nom" value="{{ v.nom }}" maxlength="60" autocomplete="off" required></label>
+    <label class="champ"><span class="nom">Ce que tu cherches</span>
+      <span class="aide">Une ou deux phrases : le poste, le type d'employeur, le contrat.</span>
+      <textarea name="objectif" rows="3" required
+        placeholder="Employé libre-service ou hôte de caisse en grande surface (Leclerc, Lidl, Aldi…), en CDI ou CDD.">{{ v.objectif }}</textarea></label>
+    <div class="duo">
+      <label class="champ"><span class="nom">Prénom</span>
+        <input type="text" name="prenom" value="{{ v.prenom }}" autocomplete="given-name" required></label>
+      <label class="champ"><span class="nom">Ville</span>
+        <input type="text" name="ville" value="{{ v.ville }}" autocomplete="address-level2" required></label>
+    </div>
+    <label class="champ"><span class="nom">Rayon de recherche</span>
+      <span class="rayon">
+        <input type="range" name="rayon_km" id="rayon" min="5" max="100" step="5" value="{{ v.rayon_km }}">
+        <output for="rayon" id="rayon-valeur">{{ v.rayon_km }} km</output>
+      </span></label>
+  </section>
+
+  <section class="case numerotee" id="case-cv">
+    <span class="numero" aria-hidden="true">2</span>
+    <h2>Dépose ton CV</h2>
+    <p class="but">L'IA lit le texte du PDF : exporte ton CV depuis ton traitement de texte, pas un scan ni une photo.</p>
+    <label class="depot" id="depot">
+      <input type="file" name="cv" id="cv" accept="application/pdf,.pdf" required>
+      <span class="grand" id="depot-titre">Dépose ton CV ici</span>
+      <span class="petit" id="depot-texte">ou appuie ici pour le choisir. PDF, 5 Mo maximum.</span>
+    </label>
+    <p class="verrou" id="verrou" hidden>Remplis d'abord l'étape 1 : nom, recherche, prénom et ville.</p>
+  </section>
+
+  <section class="case numerotee">
+    <span class="numero" aria-hidden="true">3</span>
+    <h2>L'IA lit ton CV</h2>
+    <p class="but">En une à deux minutes, elle te propose une fiche : métiers visés, recherches, mots à écarter.
+      Tu la relis, tu corriges, puis tu l'actives.</p>
+    <button class="bouton principal large" id="envoyer">Lancer l'analyse</button>
+  </section>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+"use strict";
+// Sans JavaScript, le formulaire marche quand même (champs « required ») : ce script ne fait que guider.
+const $ = id => document.getElementById(id);
+const form = $("creation"), depot = $("depot"), cv = $("cv"), envoyer = $("envoyer");
+const caseCv = $("case-cv"), verrou = $("verrou"), titre = $("depot-titre"), texte = $("depot-texte");
+const rayon = $("rayon"), rayonValeur = $("rayon-valeur");
+const infos = [...document.querySelectorAll("#case-infos [required]")];
+const MAX_OCTETS = 5 * 1024 * 1024;
+let fichierOk = false;
+
+rayon.addEventListener("input", () => { rayonValeur.textContent = `${rayon.value} km`; });
+
+function verifierFichier() {
+  const f = cv.files[0];
+  depot.classList.remove("pret", "probleme");
+  fichierOk = false;
+  if (!f) {
+    titre.textContent = "Dépose ton CV ici";
+    texte.textContent = "ou appuie ici pour le choisir. PDF, 5 Mo maximum.";
+  } else if (!(f.type === "application/pdf" || /\.pdf$/i.test(f.name))) {
+    probleme("Ce fichier n'est pas un PDF.");
+  } else if (f.size > MAX_OCTETS) {
+    probleme(`Trop lourd : ${(f.size / 1048576).toFixed(1)} Mo pour 5 Mo maximum.`);
+  } else {
+    depot.classList.add("pret");
+    titre.textContent = "CV prêt";
+    texte.textContent = `${f.name} (${Math.max(1, Math.round(f.size / 1024))} Ko). Appuie ici pour en choisir un autre.`;
+    fichierOk = true;
+  }
+}
+
+function probleme(msg) {
+  depot.classList.add("probleme");
+  titre.textContent = msg;
+  texte.textContent = "Choisis un autre fichier.";
+}
+
+function etat() {               // l'étape 2 s'ouvre quand l'étape 1 est remplie
+  const infosOk = infos.every(i => i.value.trim() !== "");
+  caseCv.classList.toggle("verrouille", !infosOk);
+  cv.disabled = !infosOk;
+  verrou.hidden = infosOk;
+  envoyer.disabled = !(infosOk && fichierOk);
+}
+
+infos.forEach(i => i.addEventListener("input", etat));
+cv.addEventListener("change", () => { verifierFichier(); etat(); });
+
+// Glisser-déposer : le fichier lâché tombe sur le champ invisible qui couvre la zone ;
+// le script ne fait que la mettre en surbrillance pendant le survol.
+["dragenter", "dragover"].forEach(t => depot.addEventListener(t, () => depot.classList.add("survol")));
+["dragleave", "drop"].forEach(t => depot.addEventListener(t, () => depot.classList.remove("survol")));
+// Un PDF lâché à côté de la zone ne doit pas s'ouvrir dans l'onglet (on perdrait le formulaire)
+const horsZone = e => !depot.contains(e.target) || cv.disabled;
+window.addEventListener("dragover", e => { if (horsZone(e)) { e.preventDefault(); e.dataTransfer.dropEffect = "none"; } });
+window.addEventListener("drop", e => { if (horsZone(e)) e.preventDefault(); });
+
+form.addEventListener("submit", e => {
+  if (envoyer.disabled) { e.preventDefault(); return; }
+  envoyer.disabled = true;      // évite un double envoi si on appuie deux fois
+  envoyer.textContent = "Envoi du CV…";
+});
+
+// Retour arrière après l'envoi : le navigateur peut réafficher la page telle qu'on l'a laissée
+window.addEventListener("pageshow", () => { envoyer.textContent = "Lancer l'analyse"; verifierFichier(); etat(); });
+</script>
+{% endblock %}

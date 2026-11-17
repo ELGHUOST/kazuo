@@ -5,11 +5,12 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.db import session
 from app.llm import queue
+from app.services import profiles as service_profils
 from app.services.collect import recalculer_exclusions
 from app.services.scoring import enqueue_scoring
 from app.web import templates
@@ -17,6 +18,7 @@ from app.web import templates
 router = APIRouter(include_in_schema=False)  # pages HTML : absentes de /docs
 
 LIBELLES = {"draft": "brouillon", "active": "actif", "paused": "en pause"}
+SCEAUX = {"draft": "下書き", "active": "稼働", "paused": "休止"}  # brouillon, en service, à l'arrêt
 CONTRATS = ["CDI", "CDD", "intérim", "alternance", "stage", "freelance"]
 ROME = re.compile(r"^[A-N][0-9]{4}$")
 CHAMPS_JSON = ("jobs", "keywords", "excluded", "rome_codes", "contracts")
@@ -34,6 +36,7 @@ MESSAGES = {
     "active": "Profil activé : il sera utilisé par la prochaine collecte.",
     "pause": "Profil mis en pause : la collecte l'ignore.",
     "analyse": "Analyse relancée : le profil repasse en brouillon.",
+    "cree": "Profil créé à partir de ton CV.",
 }
 
 
@@ -74,7 +77,7 @@ def _lignes(texte: str) -> list[str]:
 def _page(request: Request, p: dict, *, erreur=None, message=None, en_cours=False):
     return templates.TemplateResponse(
         request, "profile_edit.html",
-        {"p": p, "libelles": LIBELLES, "contrats_possibles": CONTRATS, "categories": CATEGORIES_ADZUNA,
+        {"p": p, "libelles": LIBELLES, "sceaux": SCEAUX, "contrats_possibles": CONTRATS, "categories": CATEGORIES_ADZUNA,
          "analyse_en_cours": en_cours, "erreur": erreur, "message": message},
         status_code=400 if erreur else 200,
     )
@@ -85,7 +88,65 @@ def liste(request: Request):
     with session() as conn:
         ids = [r["id"] for r in conn.execute("SELECT id FROM profiles ORDER BY id").fetchall()]
         profils = [_lire(conn, i) for i in ids]
-    return templates.TemplateResponse(request, "profiles.html", {"profils": profils, "libelles": LIBELLES})
+        # Cartes à trier par profil : mêmes règles que le swipe (groupes de doublons, note de 5 ou plus)
+        a_trier = {r["profile_id"]: r["n"] for r in conn.execute(
+            """SELECT m.profile_id, COUNT(DISTINCT o.fingerprint) AS n
+               FROM matches AS m JOIN offers AS o ON o.id = m.offer_id
+               WHERE m.decision IS NULL AND m.excluded_by IS NULL AND m.score >= 5
+               GROUP BY m.profile_id""")}
+    return templates.TemplateResponse(request, "profiles.html", {
+        "profils": profils, "libelles": LIBELLES, "sceaux": SCEAUX,
+        "categories": CATEGORIES_ADZUNA, "a_trier": a_trier})
+
+
+# ---------------------------------------------------------------------------
+# Création d'un profil depuis le navigateur
+# Ces deux routes doivent être déclarées AVANT /profils/{profile_id} : sinon FastAPI
+# essaierait de lire « nouveau » comme un numéro de profil et répondrait 422.
+# ---------------------------------------------------------------------------
+def _page_nouveau(request: Request, v: dict, erreur: str | None = None):
+    return templates.TemplateResponse(request, "profile_new.html", {"v": v, "erreur": erreur},
+                                      status_code=400 if erreur else 200)
+
+
+@router.get("/profils/nouveau", response_class=HTMLResponse)
+def nouveau(request: Request):
+    v = {"nom": "", "objectif": "", "prenom": "", "ville": "Bordeaux", "rayon_km": 30}
+    with session() as conn:
+        dernier = conn.execute(
+            "SELECT first_name, city, radius_km FROM profiles ORDER BY id DESC LIMIT 1").fetchone()
+    if dernier:  # on reprend le prénom et la zone du dernier profil : moins de saisie
+        v.update(prenom=dernier["first_name"], ville=dernier["city"], rayon_km=dernier["radius_km"])
+    return _page_nouveau(request, v)
+
+
+@router.post("/profils/nouveau")
+def creer(
+    request: Request,
+    nom: Annotated[str, Form()] = "",
+    prenom: Annotated[str, Form()] = "",
+    objectif: Annotated[str, Form()] = "",
+    ville: Annotated[str, Form()] = "",
+    rayon_km: Annotated[int, Form()] = 30,
+    cv: Annotated[UploadFile | None, File()] = None,
+):
+    v = {"nom": nom.strip(), "objectif": objectif.strip(), "prenom": prenom.strip(),
+         "ville": ville.strip(), "rayon_km": rayon_km}
+    # Mêmes contrôles que le navigateur, refaits ici : le navigateur se contourne, le serveur non
+    if not (v["nom"] and v["prenom"] and v["ville"]):
+        return _page_nouveau(request, v, "Le nom du profil, le prénom et la ville sont obligatoires.")
+    if not 5 <= rayon_km <= 100:
+        return _page_nouveau(request, v, "Le rayon doit être compris entre 5 et 100 km.")
+    if cv is None or not cv.filename:
+        return _page_nouveau(request, v, "Choisis ton CV au format PDF.")
+    data = cv.file.read(service_profils.MAX_CV_OCTETS + 1)  # jamais plus que la limite + 1 octet
+    try:
+        profile_id, _ = service_profils.create_profile(
+            v["nom"], v["prenom"], v["objectif"], v["ville"], rayon_km, data)
+    except service_profils.ProfileError as e:
+        return _page_nouveau(request, v, f"{str(e).rstrip('.')}. Choisis à nouveau ton CV : "
+                                         "par sécurité, le navigateur ne le garde pas après une erreur.")
+    return RedirectResponse(f"/profils/{profile_id}?ok=cree", status_code=303)
 
 
 @router.get("/profils/{profile_id}", response_class=HTMLResponse)
