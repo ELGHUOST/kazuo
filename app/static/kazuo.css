@@ -41,8 +41,10 @@ body::before {          /* trame de points (screentone) qui monte du bas de l'é
 
 /* ---------- En-tête du site ---------- */
 .site { display: flex; align-items: center; gap: 1rem; padding: .8rem 0 1rem; }
-.logo { font-family: var(--display); font-size: 1.6rem; line-height: 1; color: var(--washi); text-decoration: none;
-        letter-spacing: .04em; text-shadow: 3px 3px 0 var(--shu); }
+.logo { display: inline-flex; align-items: center; gap: .55rem; font-family: var(--display); font-size: 1.6rem; line-height: 1;
+        color: var(--washi); text-decoration: none; letter-spacing: .04em; text-shadow: 3px 3px 0 var(--shu); }
+.logo img { flex: none; display: block; width: 2.5rem; height: 2.5rem; }
+@media (max-width: 420px) { .logo span { display: none; } }   /* téléphone : l'emblème seul, pour laisser la place au menu */
 .site nav { display: flex; gap: .2rem; margin-left: auto; }
 .site nav a { padding: .3rem .75rem; border-radius: 999px; color: var(--clair); font-weight: 600; text-decoration: none; }
 .site nav a[aria-current="page"] { background: var(--washi); color: var(--sumi); }

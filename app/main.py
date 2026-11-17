@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -41,6 +41,12 @@ app.include_router(llm_router.router)
 app.include_router(swipe_router.router)
 app.include_router(pages_swipe.router)
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    """Les navigateurs demandent /favicon.ico d'office : on leur sert l'icône, au lieu d'une erreur 404."""
+    return FileResponse(Path(__file__).parent / "static/img/favicon-32.png", media_type="image/png")
 app.include_router(profiles_router.router)
 app.include_router(pages_profils.router)
 

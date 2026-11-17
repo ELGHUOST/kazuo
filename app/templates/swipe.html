@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#17133d">
 <title>Kazuo · Swipe</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/static/img/favicon-32.png">
+<link rel="apple-touch-icon" href="/static/img/apple-touch-icon.png">
 <link rel="preload" href="/static/fonts/dela-gothic-one.woff2" as="font" type="font/woff2" crossorigin>
 {% raw %}
 <style>
@@ -46,8 +48,10 @@
 
   /* ---------- En-tête ---------- */
   header { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: .55rem .8rem; padding: .7rem 0 .4rem; }
-  .logo { font-family: var(--display); font-size: clamp(1.3rem, 6vw, 1.65rem); line-height: 1; color: var(--washi); text-decoration: none;
-          letter-spacing: .04em; text-shadow: 3px 3px 0 var(--shu); }
+  .logo { display: inline-flex; align-items: center; gap: .55rem; font-family: var(--display); font-size: clamp(1.3rem, 6vw, 1.65rem);
+          line-height: 1; color: var(--washi); text-decoration: none; letter-spacing: .04em; text-shadow: 3px 3px 0 var(--shu); }
+  .logo img { flex: none; display: block; width: 2.5rem; height: 2.5rem; }
+  @media (max-width: 420px) { .logo span { display: none; } }
   header nav { justify-self: end; display: flex; gap: .2rem; }
   header nav a { padding: .3rem .75rem; border-radius: 999px; color: #cfcaf0; font-weight: 600; text-decoration: none; }
   header nav a[aria-current="page"] { background: var(--washi); color: var(--sumi); }
@@ -215,7 +219,7 @@
 </head>
 <body data-profil="{{ profil if profil is not none else '' }}" data-note-min="{{ note_min }}">
 <header>
-  <a class="logo" href="/" title="Offres">カズオ</a>
+  <a class="logo" href="/" title="Offres" aria-label="Kazuo : offres"><img src="/static/img/embleme.webp" alt="" width="40" height="40"><span>カズオ</span></a>
   <nav aria-label="Menu principal"><a href="/">Offres</a><a href="/swipe" aria-current="page">Swipe</a><a href="/profils">Profils</a></nav>
   <div class="reglages">
   <form method="get" action="/swipe">
