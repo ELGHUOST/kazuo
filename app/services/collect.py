@@ -16,6 +16,7 @@ log = logging.getLogger("kazuo.collect")
 
 MAX_RECHERCHES = 25  # garde-fou : au plus 25 recherches par collecte (≤ 75 appels Adzuna)
 MAX_ERREURS_RESEAU = 2  # coupe-circuit : au-delà, le réseau est en panne, inutile d'insister
+JOURS_RATTRAPAGE = 30   # un profil qui n'a encore aucune offre (tout neuf) est rattrapé sur 30 jours
 
 
 class CollecteInterrompue(RuntimeError):
@@ -83,7 +84,14 @@ def profils_actifs(profile_id: int | None = None) -> list[dict]:
 def run(jours: int | None = 1, profile_id: int | None = None) -> list[dict]:
     """Une collecte complète. Sera aussi appelée par le planificateur de 7h30 (phase 3)."""
     migrate()
-    taches = [(p, q) for p in profils_actifs(profile_id) for q in p["keywords"]]
+    profils = profils_actifs(profile_id)
+    with session() as conn:
+        deja_servis = {r[0] for r in conn.execute("SELECT DISTINCT profile_id FROM matches")}
+    neufs = {p["id"] for p in profils if p["id"] not in deja_servis}
+    for p in profils:
+        if p["id"] in neufs:
+            log.info("profil « %s » sans aucune offre : rattrapage sur %s jours", p["name"], JOURS_RATTRAPAGE)
+    taches = [(p, q) for p in profils for q in p["keywords"]]
     if len(taches) > MAX_RECHERCHES:
         log.warning("%s recherches demandées, limitées à %s", len(taches), MAX_RECHERCHES)
         taches = taches[:MAX_RECHERCHES]
@@ -92,8 +100,10 @@ def run(jours: int | None = 1, profile_id: int | None = None) -> list[dict]:
     for i, (p, q) in enumerate(taches):
         if i:
             time.sleep(adzuna.PAUSE_S)  # on espace les recherches entre elles
+        # Fenêtre de recherche : celle demandée, élargie à 30 jours pour un profil tout neuf
+        fenetre = max(jours, JOURS_RATTRAPAGE) if (p["id"] in neufs and jours is not None) else jours
         try:
-            offers = adzuna.search(q, where=p["city"], distance_km=p["radius_km"], max_days_old=jours,
+            offers = adzuna.search(q, where=p["city"], distance_km=p["radius_km"], max_days_old=fenetre,
                                    category=p["adzuna_category"])
             stats = save(offers, p, q)
         except httpx.TransportError as e:  # réseau : DNS, TLS, délai dépassé, connexion coupée

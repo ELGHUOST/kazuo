@@ -28,6 +28,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, StringConstraints, field_validator
 
+from app.dedup import normalize
+
 CodeRome = Annotated[str, StringConstraints(pattern=r"^[A-N][0-9]{4}$")]
 
 
@@ -57,12 +59,16 @@ class CvCondense(BaseModel):
         return "\n".join(l for l in lignes if not l.endswith(": "))
 
 
+MOTS_CONTRAT = {"alternance", "apprentissage", "apprenti", "apprentie", "cdi", "cdd", "interim", "stage", "freelance"}
+MOTS_VIDES = {"de", "du", "des", "d", "et", "en", "a", "au", "aux", "la", "le", "les", "l", "pour"}
+
+
 class FicheProfil(BaseModel):
     metiers: list[str] = Field(min_length=1, max_length=6, description="intitulés de métiers, sans type de contrat")
     recherches: list[str] = Field(
         min_length=3, max_length=8,
-        description="requêtes à taper dans un moteur d'offres : intitulés de poste de 2 à 5 mots, "
-                    "jamais un nom de technologie")
+        description="requêtes à taper dans un moteur d'offres : intitulés de poste courts, de 1 à 3 mots, "
+                    "sans type de contrat, lieu, enseigne ni nom de technologie")
     mots_exclus: list[str] = Field(
         max_length=8,
         description="termes désignant un AUTRE métier que celui visé ; jamais un niveau, "
@@ -83,20 +89,47 @@ class FicheProfil(BaseModel):
                 propres.append(v.strip())
         return propres
 
+    @field_validator("recherches")
+    @classmethod
+    def recherches_courtes(cls, valeurs: list[str]) -> list[str]:
+        """Adzuna exige TOUS les mots d'une recherche dans l'annonce : au-delà de 3 mots, presque rien ne sort.
+        Le code garantit donc la règle, même si l'IA l'oublie : on retire les types de contrat, on garde
+        les 3 premiers mots porteurs de sens (l'intitulé vient en premier) et pas de petit mot en fin."""
+        vus, propres = set(), []
+        for v in valeurs:
+            garde, pleins = [], 0
+            for mot in v.split():
+                n = normalize(mot)
+                if n in MOTS_CONTRAT:
+                    continue
+                if n not in MOTS_VIDES:
+                    if pleins == 3:
+                        break
+                    pleins += 1
+                garde.append(mot)
+            while garde and normalize(garde[-1]) in MOTS_VIDES:
+                garde.pop()
+            courte = " ".join(garde)
+            if courte and courte.lower() not in vus:
+                vus.add(courte.lower())
+                propres.append(courte)
+        return propres
+
 
 SYSTEME_PROFIL = (
     "Tu aides un candidat à paramétrer une recherche d'emploi automatique en France. "
     "À partir de son CV et de l'objectif du profil, propose une fiche. Règles : "
     "1) N'invente rien : uniquement ce que disent le CV et l'objectif. "
     "2) « metiers » : des intitulés de métier, sans mention de contrat. "
-    "3) « recherches » : des intitulés de poste de 2 à 5 mots, tels qu'on les tape dans un moteur "
-    "d'offres (ex. « technicien systèmes et réseaux », « administrateur réseau »), jamais un mot seul "
-    "ni un nom de technologie. Si l'objectif mentionne l'alternance, ajoute une ou deux recherches "
-    "contenant le mot « alternance ». "
+    "3) « recherches » : des intitulés de poste COURTS, de 1 à 3 mots, tels qu'on les tape dans un moteur "
+    "d'offres (ex. « technicien réseau », « préparateur de commandes », « hôte de caisse ») : plus une "
+    "recherche est longue, moins elle trouve d'offres. Jamais de type de contrat (alternance, CDI…), "
+    "de lieu, d'enseigne ni de nom de technologie. "
     "4) « mots_exclus » : peu nombreux, uniquement des termes qui désignent un AUTRE métier que celui "
     "visé (ex. pour un profil réseaux informatiques : « eau potable », « électricien », « plomberie »). "
     "Jamais un niveau, un type de contrat ni un mode de travail. En cas de doute, n'exclus pas. "
-    "5) « contrats » : conformes à l'objectif ; l'alternance seulement si l'objectif la mentionne. "
+    "5) « contrats » : conformes à l'objectif ; l'alternance, le stage et le freelance seulement si "
+    "l'objectif les mentionne. "
     "6) Codes ROME : seulement si tu en es certain, sinon une liste vide. "
     "7) « cv_condense » : extrait du CV SEUL, formulations courtes, sans phrase. Pour la formation, "
     "reprends le statut exact écrit dans le CV (obtenu, en cours). "
@@ -159,7 +192,7 @@ SYSTEME_NOTATION = (
     "- accessible : ouvert à un débutant ayant le diplôme du candidat ;\n"
     "- un_peu_au_dessus : courte expérience souhaitée (1 à 2 ans), intitulé « ingénieur » sans autre "
     "indice de séniorité, ou niveau incertain ;\n"
-    "- inaccessible : senior, confirmé, expert, lead, architecte, responsable ou manager ; 3 ans "
+    "- inaccessible : senior, confirmé, expert, lead, référent, architecte, responsable ou manager ; 3 ans "
     "d'expérience ou plus ; salaire supérieur à 45 000 €/an ; ou formation d'un niveau inférieur au "
     "diplôme du candidat.\n"
     "Équivalences : BUT et licence = Bac+3 ; DUT et BTS = Bac+2 ; master et diplôme d'ingénieur = Bac+5.\n"
@@ -206,17 +239,21 @@ def score_offer(payload: dict) -> dict:
     from app.services.scoring import note_finale  # import local : évite un import circulaire au démarrage
 
     oid, pid = payload["offer_id"], payload["profile_id"]
-    # Même intitulé et même entreprise déjà évalués pour ce profil : on recopie, sans rappeler l'IA.
+    # Même annonce déjà évaluée pour ce profil : on recopie, sans rappeler l'IA. « Même annonce » =
+    # même empreinte (titre normalisé, entreprise, ville : un doublon publié deux fois), ou même
+    # intitulé exact et même entreprise (une enseigne qui publie la même offre dans plusieurs villes).
     with session() as conn:
-        o = conn.execute("SELECT title, company FROM offers WHERE id = ?", (oid,)).fetchone()
+        o = conn.execute("SELECT title, company, fingerprint FROM offers WHERE id = ?", (oid,)).fetchone()
         if o is None:
             raise ValueError(f"offre {oid} introuvable")
         deja = conn.execute(
             """SELECT m.score, m.explanation, m.factors, m.offer_id FROM matches AS m
                JOIN offers AS x ON x.id = m.offer_id
                WHERE m.profile_id = ? AND m.factors IS NOT NULL AND m.offer_id != ?
-                 AND lower(x.title) = lower(?) AND lower(coalesce(x.company, '')) = lower(coalesce(?, ''))
-               LIMIT 1""", (pid, oid, o["title"], o["company"])).fetchone()
+                 AND (x.fingerprint = ?
+                      OR (lower(x.title) = lower(?) AND lower(coalesce(x.company, '')) = lower(coalesce(?, ''))))
+               ORDER BY x.fingerprint = ? DESC
+               LIMIT 1""", (pid, oid, o["fingerprint"], o["title"], o["company"], o["fingerprint"])).fetchone()
         if deja is not None:
             conn.execute("UPDATE matches SET score = ?, explanation = ?, factors = ? "
                          "WHERE offer_id = ? AND profile_id = ?",

@@ -43,6 +43,24 @@ def recalculer_notes(profile_id: int | None = None) -> int:
     return changements
 
 
+def harmoniser_doublons(profile_id: int | None = None) -> int:
+    """Doublons (même empreinte, même profil) notés différemment : on remet leurs notes à zéro pour
+    qu'ils soient renotés d'une seule voix (le premier est évalué, les autres recopient sa note).
+    Seules les offres pas encore triées sont touchées. Renvoie le nombre de notes remises à zéro."""
+    filtre, args = ("AND m2.profile_id = ?", (profile_id,)) if profile_id is not None else ("", ())
+    with session() as conn:
+        return conn.execute(f"""
+            UPDATE matches SET score = NULL, explanation = NULL, factors = NULL
+            WHERE decision IS NULL AND (profile_id, offer_id) IN (
+                SELECT m.profile_id, m.offer_id FROM matches AS m JOIN offers AS o ON o.id = m.offer_id
+                WHERE (m.profile_id, o.fingerprint) IN (
+                    SELECT m2.profile_id, o2.fingerprint FROM matches AS m2
+                    JOIN offers AS o2 ON o2.id = m2.offer_id
+                    WHERE m2.score IS NOT NULL {filtre}
+                    GROUP BY m2.profile_id, o2.fingerprint HAVING COUNT(DISTINCT m2.score) > 1))""",
+            args).rowcount
+
+
 def enqueue_scoring(profile_id: int | None = None, limite: int | None = None) -> int:
     """Met en file la notation des offres retenues (non exclues), pas encore notées,
     sans tâche déjà en attente, pour les profils actifs. Les plus récentes d'abord :
@@ -77,7 +95,11 @@ def main() -> None:
     a.add_argument("--profil", type=int, help="un seul profil (id)")
     a.add_argument("--limite", type=int, help="au plus N offres (pour tester)")
     a.add_argument("--recalculer", action="store_true", help="recalcule les notes depuis les critères, sans l'IA")
+    a.add_argument("--harmoniser", action="store_true",
+                   help="renote d'une seule voix les doublons qui ont reçu des notes différentes")
     args = a.parse_args()
+    if args.harmoniser:
+        print(f"{harmoniser_doublons(args.profil)} note(s) de doublons remise(s) à zéro")
     if args.recalculer:
         print(f"{recalculer_notes(args.profil)} note(s) modifiée(s)")
         return
