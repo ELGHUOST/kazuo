@@ -32,6 +32,8 @@ class Settings:
     adzuna_app_key: str = field(repr=False)
     gmail_address: str = field(repr=False)
     gmail_app_password: str = field(repr=False)
+    # Comptes Tailscale autorisés (en minuscules). Vide = tout compte de ton tailnet.
+    utilisateurs: frozenset[str] = frozenset()
 
 
 settings = Settings(
@@ -45,4 +47,5 @@ settings = Settings(
     adzuna_app_key=_env("ADZUNA_APP_KEY"),
     gmail_address=_env("GMAIL_ADDRESS"),
     gmail_app_password=_env("GMAIL_APP_PASSWORD"),
+    utilisateurs=frozenset(u.strip().lower() for u in _env("KAZUO_UTILISATEURS").split(",") if u.strip()),
 )

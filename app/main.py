@@ -19,6 +19,7 @@ from app.routers import pages_profils
 from app.routers import profiles as profiles_router
 from app.routers import swipe as swipe_router
 from app.routers import pages_swipe
+from app import securite
 from app.web import templates
 
 TZ = ZoneInfo(settings.tz)
@@ -31,12 +32,22 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     migrate()      # crée la base ou applique les migrations manquantes
+    if not settings.utilisateurs:
+        logging.getLogger("kazuo.securite").warning(
+            "KAZUO_UTILISATEURS est vide : tout compte de ton réseau Tailscale peut entrer")
     queue.start()  # démarre le worker IA (un seul thread)
     yield
     queue.stop()   # arrêt propre du worker
 
 
 app = FastAPI(title="Kazuo", version="0.1.0", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def garde(request: Request, call_next):
+    """Chaque requête passe d'abord par la garde : identité Tailscale et protection CSRF."""
+    return securite.verifier(request) or await call_next(request)
+
 app.include_router(llm_router.router)
 app.include_router(swipe_router.router)
 app.include_router(pages_swipe.router)

@@ -9,7 +9,8 @@ User=kazuo
 Group=kazuo
 WorkingDirectory=/opt/kazuo
 Environment=PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
-ExecStart=/opt/kazuo/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --no-server-header
+# 127.0.0.1 : seul Tailscale Serve (sur cette même machine) peut joindre Kazuo
+ExecStart=/opt/kazuo/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1 --no-server-header
 Restart=on-failure
 RestartSec=5
 UMask=0027
