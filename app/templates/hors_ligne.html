@@ -1,0 +1,11 @@
+{% extends "theme.html" %}
+{% block title %}Kazuo · hors ligne{% endblock %}
+{% block content %}
+<section class="case attente">
+  <p class="kanji" aria-hidden="true">圏外</p>
+  <h2>Kazuo est injoignable</h2>
+  <p class="but">L'appli a besoin de ton réseau Tailscale pour charger les offres.
+    Vérifie que Tailscale est activé sur ce téléphone, puis réessaie.</p>
+  <p><button class="bouton principal" type="button" onclick="location.reload()">Réessayer</button></p>
+</section>
+{% endblock %}

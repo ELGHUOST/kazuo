@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -47,6 +47,44 @@ app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), na
 def favicon():
     """Les navigateurs demandent /favicon.ico d'office : on leur sert l'icône, au lieu d'une erreur 404."""
     return FileResponse(Path(__file__).parent / "static/img/favicon-32.png", media_type="image/png")
+
+
+# ---------------------------------------------------------------------------
+# PWA : le manifeste (nom, icônes, page de démarrage) et le service worker.
+# Le service worker est servi à la racine (/sw.js) pour pouvoir contrôler toutes les pages.
+# ---------------------------------------------------------------------------
+MANIFESTE = {
+    "name": "Kazuo",
+    "short_name": "Kazuo",
+    "description": "Offres d'emploi collectées chaque matin et notées par une IA locale, à trier d'un geste.",
+    "lang": "fr",
+    "start_url": "/swipe",
+    "scope": "/",
+    "display": "standalone",
+    "background_color": "#17133d",
+    "theme_color": "#17133d",
+    "icons": [
+        {"src": f"/static/img/icone-{t}.png", "sizes": f"{t}x{t}", "type": "image/png", "purpose": usage}
+        for t in (192, 512) for usage in ("any", "maskable")
+    ],
+}
+
+
+@app.get("/manifest.webmanifest", include_in_schema=False)
+def manifeste():
+    return JSONResponse(MANIFESTE, media_type="application/manifest+json")
+
+
+@app.get("/sw.js", include_in_schema=False)
+def service_worker():
+    # no-cache : le navigateur revérifie le fichier à chaque visite, pour récupérer les mises à jour
+    return FileResponse(Path(__file__).parent / "static/sw.js", media_type="text/javascript",
+                        headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/hors-ligne", response_class=HTMLResponse, include_in_schema=False)
+def hors_ligne(request: Request):
+    return templates.TemplateResponse(request, "hors_ligne.html", {})
 app.include_router(profiles_router.router)
 app.include_router(pages_profils.router)
 

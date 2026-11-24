@@ -7,12 +7,17 @@
 <title>Kazuo · Swipe</title>
 <link rel="icon" type="image/png" sizes="32x32" href="/static/img/favicon-32.png">
 <link rel="apple-touch-icon" href="/static/img/apple-touch-icon.png">
-<link rel="preload" href="/static/fonts/dela-gothic-one.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Kazuo">
+<link rel="preload" href="/static/fonts/dela-gothic-one.woff2?v=2" as="font" type="font/woff2" crossorigin>
 {% raw %}
 <style>
   @font-face {
     font-family: "Dela Gothic One";
-    src: url("/static/fonts/dela-gothic-one.woff2") format("woff2");
+    src: url("/static/fonts/dela-gothic-one.woff2?v=2") format("woff2");
     font-display: swap;
   }
   :root {
@@ -607,5 +612,9 @@ charger();
 majCompteurs();
 </script>
 {% endraw %}
+<script>
+  // Service worker : rend Kazuo installable et le fait démarrer même sans réseau (HTTPS obligatoire)
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");
+</script>
 </body>
 </html>
