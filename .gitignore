@@ -1,3 +1,13 @@
 .venv/
 __pycache__/
 *.pyc
+# Filets de sécurité : rien de tout ça ne doit partir sur GitHub
+*.env
+.env*
+*.db
+*.db-wal
+*.db-shm
+*.sqlite*
+*.pdf
+*.patch
+*.tgz
